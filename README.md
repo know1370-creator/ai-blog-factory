@@ -1,28 +1,33 @@
-# MI Creator Hub V9.4.1 Hotfix
+# MI Creator Hub V9.5
 
-This patch fixes the `/calendar/` internal server error.
+V9.5 adds manual content performance analytics and a safe system diagnostics page.
 
-## Cause
+## New screens
 
-The calendar attempted to filter finance records using `FinanceEntry.entry_type`,
-but the V9.1 finance model stores income and cost types in the `category` column.
+- `/analytics/`
+  - Record views, likes, comments, saves, shares, clicks, and revenue
+  - Compare channel performance
+  - Receive recommendations based only on entered data
+  - Delete incorrect records
 
-## Fix
-
-Monthly revenue now filters by the existing income categories:
-
-- adsense
-- coupang
-- atomy
-- other_income
+- `/diagnostics/`
+  - Database connection check
+  - Required table checks
+  - Environment-variable presence checks
+  - Secret values are never displayed
+  - No OpenAI request is made, so the check does not create API cost
 
 ## Deployment
 
 Upload the extracted files over the existing GitHub repository.
 Do not delete the database or Render environment variables.
 
-Verify:
+## Verification
 
-- `/health` returns version `9.4.1`
-- `/calendar/` opens normally
-- `/business/` remains available
+- `/health` returns version `9.5`
+- `/v9/status` returns `modular-foundation-v9.5`
+- `/analytics/` opens normally
+- `/diagnostics/` opens normally
+- `/calendar/` remains available
+
+The new `content_metric` table is created automatically.

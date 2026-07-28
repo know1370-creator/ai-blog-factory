@@ -25,6 +25,14 @@ def create_app() -> Flask:
     if "calendar_v94" not in app.blueprints:
         app.register_blueprint(calendar_bp)
 
+    from .routes.analytics import analytics_bp
+    if "analytics_v95" not in app.blueprints:
+        app.register_blueprint(analytics_bp)
+
+    from .routes.diagnostics import diagnostics_bp
+    if "diagnostics_v95" not in app.blueprints:
+        app.register_blueprint(diagnostics_bp)
+
     with app.app_context():
         db.create_all()
 
