@@ -1,12 +1,14 @@
-# MI Creator Hub V4
+# MI Creator Hub V4.1
 
-이번 버전에서 실제로 되는 기능:
+V4 기능에 **AI 썸네일 자동 생성**을 추가한 버전입니다.
 
-- 키워드로 한국어 SEO 블로그 초안 생성
-- 제목, 메타 설명, HTML 본문 수정 및 미리보기
-- Google OAuth로 Blogger 연결
-- 내 Blogger 목록 자동 불러오기
-- 선택한 Blogger에 초안 또는 공개 발행
+## 새 기능
+
+- 글 수정 화면에서 썸네일 문구 입력
+- 분위기 선택 후 AI 가로형 대표 이미지 생성
+- 썸네일 미리보기 및 크게 보기
+- Blogger 발행 시 생성된 이미지를 본문 맨 위에 자동 삽입
+- 긴 AI 작업을 위해 Gunicorn 타임아웃 300초 설정용 `Procfile` 포함
 
 ## Render 환경변수
 
@@ -20,20 +22,18 @@
 선택:
 
 - `OPENAI_TEXT_MODEL` 기본값 `gpt-4.1-mini`
-- `GOOGLE_REDIRECT_URI` 기본값은 현재 사이트의 `/oauth2callback`
+- `OPENAI_IMAGE_MODEL` 기본값 `gpt-image-1`
+- `GOOGLE_REDIRECT_URI`
 - `DB_PATH` 기본값 `/tmp/mi_creator_hub.db`
+- `MEDIA_DIR` 기본값 `/tmp/mi_creator_hub_media`
 
-## Render 명령어
+## Render 설정
 
-- Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app`
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `gunicorn app:app --timeout 300`
 
-## Google Cloud 리디렉션 URI
-
-현재 Render 주소가 `https://ai-blog-factory.onrender.com`이라면:
-
-`https://ai-blog-factory.onrender.com/oauth2callback`
+GitHub에 `Procfile`을 올려도 기존 Render Start Command가 따로 지정되어 있으면 Render 설정값이 우선할 수 있습니다. 그 경우 Start Command를 위 명령으로 직접 바꿔 주세요.
 
 ## 주의
 
-기본 DB는 `/tmp`라 Render가 재시작되면 글과 Google 연결이 초기화될 수 있습니다. 기능 테스트가 끝난 뒤 Render Disk 또는 외부 DB를 붙이는 V4.1 단계로 업그레이드합니다.
+현재 기본 DB와 이미지는 Render의 `/tmp`에 저장되므로 서비스가 재시작되면 사라질 수 있습니다. 기능 확인 후 영구 저장소를 붙이는 다음 버전으로 확장하는 것이 좋습니다.

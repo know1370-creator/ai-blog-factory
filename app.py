@@ -1,3 +1,4 @@
+import base64
 import html
 import json
 import os
@@ -8,11 +9,12 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
-from flask import Flask, flash, redirect, render_template_string, request, session, url_for
+from flask import Flask, flash, redirect, render_template_string, request, send_from_directory, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DB_PATH", "/tmp/mi_creator_hub.db"))
+MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/tmp/mi_creator_hub_media"))
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger"
@@ -23,7 +25,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 STYLE = r'''
 :root{--bg:#f5f7fb;--card:#fff;--ink:#182033;--muted:#667085;--line:#e5e9f2;--accent:#6d5dfc;--accent2:#5145cd;--good:#067647;--warn:#b54708}
-*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f3f0ff 0,#f7f8fc 260px);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}.wrap{max-width:940px;margin:auto;padding:18px}.hero{padding:25px 2px 17px}.hero h1{margin:0;font-size:30px;letter-spacing:-1px}.hero p{color:var(--muted);margin:8px 0 0}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px;box-shadow:0 8px 30px rgba(35,28,90,.06)}h2{font-size:20px;margin:0 0 12px}label{display:block;font-weight:750;margin:12px 0 7px}input,select,textarea{width:100%;padding:13px;border:1px solid #d0d5dd;border-radius:12px;font-size:16px;background:#fff;color:var(--ink)}textarea{min-height:115px;resize:vertical}.editor{min-height:470px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 16px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff}.btn:hover{background:var(--accent2)}.btn.light{background:#eef0f6;color:#252b3b}.btn.good{background:#067647}.btn.danger{background:#b42318}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.notice{padding:12px 14px;border-radius:12px;background:#fff4e5;border:1px solid #fedf89;margin-bottom:14px}.notice.ok{background:#ecfdf3;border-color:#abefc6}.article{border-top:1px solid var(--line);padding:15px 0}.article:first-child{border-top:0}.article h3{margin:0 0 6px;font-size:18px}.meta{font-size:13px;color:var(--muted)}.status{display:inline-block;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;font-weight:700}.status.on{background:#ecfdf3;color:var(--good)}.status.off{background:#fff4e5;color:var(--warn)}.connection{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}.connection:first-of-type{border-top:0}.preview{line-height:1.75}.preview h2{margin-top:28px}.preview h3{margin-top:22px}.preview img{max-width:100%}.small{font-size:13px;color:var(--muted)}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f3f0ff 0,#f7f8fc 260px);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}.wrap{max-width:940px;margin:auto;padding:18px}.hero{padding:25px 2px 17px}.hero h1{margin:0;font-size:30px;letter-spacing:-1px}.hero p{color:var(--muted);margin:8px 0 0}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px;box-shadow:0 8px 30px rgba(35,28,90,.06)}h2{font-size:20px;margin:0 0 12px}label{display:block;font-weight:750;margin:12px 0 7px}input,select,textarea{width:100%;padding:13px;border:1px solid #d0d5dd;border-radius:12px;font-size:16px;background:#fff;color:var(--ink)}textarea{min-height:115px;resize:vertical}.editor{min-height:470px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 16px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff}.btn:hover{background:var(--accent2)}.btn.light{background:#eef0f6;color:#252b3b}.btn.good{background:#067647}.btn.danger{background:#b42318}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.notice{padding:12px 14px;border-radius:12px;background:#fff4e5;border:1px solid #fedf89;margin-bottom:14px}.notice.ok{background:#ecfdf3;border-color:#abefc6}.article{border-top:1px solid var(--line);padding:15px 0}.article:first-child{border-top:0}.article h3{margin:0 0 6px;font-size:18px}.meta{font-size:13px;color:var(--muted)}.status{display:inline-block;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;font-weight:700}.status.on{background:#ecfdf3;color:var(--good)}.status.off{background:#fff4e5;color:var(--warn)}.connection{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}.connection:first-of-type{border-top:0}.preview{line-height:1.75}.preview h2{margin-top:28px}.preview h3{margin-top:22px}.preview img{max-width:100%;border-radius:16px}.thumb{width:100%;aspect-ratio:1200/630;object-fit:cover;border-radius:16px;border:1px solid var(--line)}.thumb-wrap{position:relative}.thumb-badge{position:absolute;left:16px;bottom:16px;right:16px;background:rgba(15,23,42,.72);color:#fff;padding:12px 14px;border-radius:12px;font-weight:850;font-size:22px;backdrop-filter:blur(4px)}.small{font-size:13px;color:var(--muted)}
 @media(max-width:640px){.grid{grid-template-columns:1fr}.hero h1{font-size:26px}.wrap{padding:13px}.card{padding:15px;border-radius:17px}.btn{width:100%}.actions form{width:100%}.actions form .btn{width:100%}.connection{align-items:flex-start;flex-direction:column}}
 '''
 
@@ -47,7 +49,11 @@ PAGE = r'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name
 EDIT_PAGE = r'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>글 수정</title><style>''' + STYLE + r'''</style></head><body><main class="wrap"><section class="hero"><h1>글 확인 및 수정</h1><p><a href="/">← 홈으로</a></p></section>
 {% with messages=get_flashed_messages(with_categories=true) %}{% for cat,msg in messages %}<div class="notice {{'ok' if cat=='ok' else ''}}">{{msg}}</div>{% endfor %}{% endwith %}
 <section class="card"><form method="post" action="{{url_for('save',article_id=a['id'])}}"><label>제목</label><input name="title" value="{{a['title']}}"><label>메타 설명</label><input name="meta_description" value="{{a['meta_description'] or ''}}"><label>본문 HTML</label><textarea class="editor" name="content_html">{{a['content_html']}}</textarea><div class="actions"><button class="btn" type="submit">수정 내용 저장</button></div></form></section>
-<section class="card"><h2>미리보기</h2><div class="preview">{{a['content_html']|safe}}</div></section>
+<section class="card"><h2>AI 썸네일</h2>
+{% if a['thumbnail_path'] %}<div class="thumb-wrap"><img class="thumb" src="{{url_for('media',filename=a['thumbnail_path'])}}" alt="{{a['title']}}"><div class="thumb-badge">{{a['thumbnail_text'] or a['title']}}</div></div>{% else %}<p class="small">아직 썸네일이 없습니다. 아래 버튼을 누르면 글 내용에 맞는 가로형 대표 이미지를 만들어요.</p>{% endif %}
+<form method="post" action="{{url_for('generate_thumbnail_route',article_id=a['id'])}}"><label>썸네일 문구</label><input name="thumbnail_text" value="{{a['thumbnail_text'] or a['title']}}" maxlength="45"><label>이미지 분위기</label><select name="thumbnail_style"><option>따뜻한 생활 사진</option><option>깔끔한 매거진</option><option>밝은 일러스트</option><option>전문적인 인포그래픽</option></select><div class="actions"><button class="btn" type="submit">{{'썸네일 다시 만들기' if a['thumbnail_path'] else 'AI 썸네일 만들기'}}</button></div></form>
+{% if a['thumbnail_path'] %}<div class="actions"><a class="btn light" href="{{url_for('media',filename=a['thumbnail_path'])}}" target="_blank">이미지 크게 보기</a></div>{% endif %}</section>
+<section class="card"><h2>미리보기</h2>{% if a['thumbnail_path'] %}<p><img src="{{url_for('media',filename=a['thumbnail_path'],_external=False)}}" alt="{{a['title']}}"></p>{% endif %}<div class="preview">{{a['content_html']|safe}}</div></section>
 <section class="card"><h2>Blogger 보내기</h2><p class="small">처음에는 ‘초안’으로 보내 확인하는 것을 권장해요.</p><div class="actions"><form method="post" action="{{url_for('publish',article_id=a['id'])}}"><input type="hidden" name="draft" value="true"><button class="btn light" type="submit">Blogger 초안으로 보내기</button></form><form method="post" action="{{url_for('publish',article_id=a['id'])}}"><input type="hidden" name="draft" value="false"><button class="btn good" type="submit">바로 공개 발행</button></form></div></section>
 </main></body></html>'''
 
@@ -70,6 +76,9 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'saved',
             blogger_post_id TEXT,
             blogger_url TEXT,
+            thumbnail_path TEXT,
+            thumbnail_text TEXT,
+            thumbnail_prompt TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )''')
@@ -88,6 +97,12 @@ def init_db():
         columns = {r[1] for r in conn.execute("PRAGMA table_info(articles)").fetchall()}
         if "blogger_url" not in columns:
             conn.execute("ALTER TABLE articles ADD COLUMN blogger_url TEXT")
+        if "thumbnail_path" not in columns:
+            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_path TEXT")
+        if "thumbnail_text" not in columns:
+            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_text TEXT")
+        if "thumbnail_prompt" not in columns:
+            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_prompt TEXT")
 
 
 def set_setting(key, value):
@@ -174,6 +189,44 @@ def generate_article(keyword, brand, article_type, length, audience, experience)
             raise RuntimeError("AI가 필요한 글 내용을 모두 만들지 못했습니다. 다시 시도해 주세요.")
     return data
 
+
+
+def generate_thumbnail_image(article, thumbnail_text, thumbnail_style):
+    key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다.")
+    model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+    prompt = f"""한국 블로그 대표 이미지. 주제: {article['keyword']}. 글 제목: {article['title']}.
+분위기: {thumbnail_style}. 가로형 1200x630 비율에 잘 맞는 중심 구도.
+핵심 대상을 크고 선명하게 보여주고, 복잡한 콜라주나 로고, 워터마크는 넣지 마세요.
+이미지 안에 글자를 넣지 마세요. 사람을 넣는 경우 자연스럽고 일상적인 한국 생활 장면으로 표현하세요."""
+    response = requests.post(
+        "https://api.openai.com/v1/images/generations",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": model, "prompt": prompt, "size": "1536x1024", "quality": "medium", "output_format": "jpeg"},
+        timeout=240,
+    )
+    if not response.ok:
+        try:
+            message = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            message = response.text
+        raise RuntimeError(f"OpenAI 이미지 오류: {message[:300]}")
+    payload = response.json()
+    item = (payload.get("data") or [{}])[0]
+    image_bytes = None
+    if item.get("b64_json"):
+        image_bytes = base64.b64decode(item["b64_json"])
+    elif item.get("url"):
+        downloaded = requests.get(item["url"], timeout=120)
+        downloaded.raise_for_status()
+        image_bytes = downloaded.content
+    if not image_bytes:
+        raise RuntimeError("이미지 데이터를 받지 못했습니다.")
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"article_{article['id']}_{secrets.token_hex(5)}.jpg"
+    (MEDIA_DIR / filename).write_bytes(image_bytes)
+    return filename, prompt
 
 def google_config_ready():
     return bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"))
@@ -312,6 +365,30 @@ def save(article_id):
     return redirect(url_for("edit", article_id=article_id))
 
 
+
+@app.get("/media/<path:filename>")
+def media(filename):
+    return send_from_directory(MEDIA_DIR, filename)
+
+
+@app.post("/article/<int:article_id>/thumbnail")
+def generate_thumbnail_route(article_id):
+    try:
+        with db() as conn:
+            article = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
+        if not article:
+            raise RuntimeError("글을 찾지 못했습니다.")
+        thumbnail_text = request.form.get("thumbnail_text", "").strip() or article["title"]
+        thumbnail_style = request.form.get("thumbnail_style", "깔끔한 매거진")
+        filename, prompt = generate_thumbnail_image(article, thumbnail_text, thumbnail_style)
+        with db() as conn:
+            conn.execute("UPDATE articles SET thumbnail_path=?,thumbnail_text=?,thumbnail_prompt=?,updated_at=? WHERE id=?",
+                         (filename, thumbnail_text, prompt, datetime.now().isoformat(timespec="seconds"), article_id))
+        flash("AI 썸네일이 만들어졌어요.", "ok")
+    except Exception as exc:
+        flash(f"썸네일 생성 실패: {exc}", "error")
+    return redirect(url_for("edit", article_id=article_id))
+
 @app.get("/google/login")
 def google_login():
     if not google_config_ready():
@@ -387,6 +464,9 @@ def publish(article_id):
             raise RuntimeError("글을 찾지 못했습니다.")
         is_draft = request.form.get("draft", "true").lower() == "true"
         content = article["content_html"]
+        if article["thumbnail_path"]:
+            image_url = url_for("media", filename=article["thumbnail_path"], _external=True)
+            content = f'<p><img src="{html.escape(image_url)}" alt="{html.escape(article["title"])}" style="max-width:100%;height:auto"></p>' + content
         if article["meta_description"]:
             content = f"<p><em>{html.escape(article['meta_description'])}</em></p>" + content
         result = blogger_request(
