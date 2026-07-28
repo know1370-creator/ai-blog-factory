@@ -1,40 +1,33 @@
-# MI Creator Hub V9.2
+# MI Creator Hub V9.3
 
-V9.2 adds the AI Content Assistant while preserving V9.1 revenue features and all existing Blogger functionality.
+V9.3 adds a weekly AI content planner while preserving all existing V9.2 features.
 
-## New in V9.2
+## New features
 
-- New AI Content Assistant screen at `/assistant/`
-- One topic creates:
-  - Blog title, meta description, HTML article, and tags
-  - SEO analysis
-  - Instagram caption with CTA and hashtags
-  - Threads post
-  - Reels/Shorts script with hook, scenes, subtitles, and CTA
-- Brand presets:
-  - 말썽쟁이 딸랑구
-  - 미우와 웅이
-  - 보험·재무
-  - 애터미·생활용품
-  - 쿠팡·쇼핑
-- Recent content list and pipeline progress
-- Thumbnail generation remains optional to avoid unnecessary image-generation cost
+- Weekly planner screen: `/planner/`
+- Generates seven days of content ideas from one weekly theme
+- Mixes blog, Instagram comic, Reels/Shorts, Threads, and shopping content
+- Saves title, hook, content angle, CTA, date, brand, and status
+- Converts only selected ideas into full blog and social drafts
+- Keeps external publishing under user approval
+- Existing AI assistant: `/assistant/`
+- Existing finance dashboard: `/business/`
 
 ## Deployment
 
-Upload all extracted files and folders to the existing GitHub repository without deleting the database or Render environment variables.
+Upload the extracted files and folders to the existing GitHub repository without deleting existing files, Render environment variables, or the database.
 
-Render start command:
+Render command:
 
 ```text
 gunicorn app:app
 ```
 
-Verify after deployment:
+Verify:
 
-- `/health` shows version `9.2`
-- `/v9/status` shows `modular-foundation-v9.2`
-- `/assistant/` opens the AI Content Assistant
-- `/business/` still opens the V9.1 revenue dashboard
+- `/health` → version 9.3
+- `/v9/status` → modular-foundation-v9.3
+- `/planner/` → weekly content planner
+- `/assistant/` and `/business/` remain available
 
-Existing articles, Blogger connections, scheduled posts, and finance entries are preserved.
+The new `weekly_plan_item` database table is created automatically.
