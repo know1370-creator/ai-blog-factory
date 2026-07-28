@@ -494,7 +494,7 @@ def google_connect():
         flow = Flow.from_client_config(
             google_client_config(),
             scopes=GOOGLE_SCOPES,
-            redirect_uri=url_for("google_callback", _external=True),
+            redirect_uri="https://ai-blog-factory.onrender.com/oauth2callback",
         )
         authorization_url, state = flow.authorization_url(
             access_type="offline",
@@ -515,7 +515,7 @@ def google_callback():
             google_client_config(),
             scopes=GOOGLE_SCOPES,
             state=session.get("oauth_state"),
-            redirect_uri=url_for("google_callback", _external=True),
+            redirect_uri="https://ai-blog-factory.onrender.com/oauth2callback",
         )
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
