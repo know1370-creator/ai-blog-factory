@@ -229,7 +229,7 @@ def google_client_config():
             "client_secret": client_secret,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [url_for("google_callback", _external=True)],
+            "redirect_uris": ["https://ai-blog-factory.onrender.com/oauth2callback"],
         }
     }
 
