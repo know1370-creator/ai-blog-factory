@@ -495,14 +495,21 @@ def google_connect():
             google_client_config(),
             scopes=GOOGLE_SCOPES,
             redirect_uri="https://ai-blog-factory.onrender.com/oauth2callback",
+            autogenerate_code_verifier=True,
         )
+
         authorization_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="select_account consent",
         )
+
+        # 구글 로그인 후 다시 확인할 값 저장
         session["oauth_state"] = state
+        session["oauth_code_verifier"] = flow.code_verifier
+
         return redirect(authorization_url)
+
     except Exception as e:
         flash(f"Google 연결 준비 실패: {e}")
         return redirect(url_for("home"))
@@ -511,38 +518,76 @@ def google_connect():
 @app.get("/oauth2callback")
 def google_callback():
     try:
+        oauth_state = session.get("oauth_state")
+        code_verifier = session.get("oauth_code_verifier")
+
+        if not oauth_state:
+            raise RuntimeError(
+                "Google 로그인 정보가 만료됐습니다. Google 연결 버튼을 다시 눌러주세요."
+            )
+
+        if not code_verifier:
+            raise RuntimeError(
+                "Google 인증 확인키가 없습니다. Google 연결 버튼을 다시 눌러주세요."
+            )
+
         flow = Flow.from_client_config(
             google_client_config(),
             scopes=GOOGLE_SCOPES,
-            state=session.get("oauth_state"),
+            state=oauth_state,
             redirect_uri="https://ai-blog-factory.onrender.com/oauth2callback",
+            code_verifier=code_verifier,
         )
+
         flow.fetch_token(authorization_response=request.url)
+
         creds = flow.credentials
         set_setting("google_credentials", creds.to_json())
+
+        # 연결이 끝났으므로 임시 인증값 삭제
+        session.pop("oauth_state", None)
+        session.pop("oauth_code_verifier", None)
+
         flash("Google Blogger 연결이 완료됐어요.")
+
     except Exception as e:
+        session.pop("oauth_state", None)
+        session.pop("oauth_code_verifier", None)
         flash(f"Google 연결 실패: {e}")
+
     return redirect(url_for("home"))
 
 
 @app.get("/google/change-account")
 def google_change_account():
-    row = AppSetting.query.filter_by(setting_key="google_credentials").first()
+    row = AppSetting.query.filter_by(
+        setting_key="google_credentials"
+    ).first()
+
     if row:
         db.session.delete(row)
         db.session.commit()
+
     session.pop("oauth_state", None)
+    session.pop("oauth_code_verifier", None)
+
     flash("기존 Google 연결을 해제했습니다. 사용할 계정을 다시 선택해 주세요.")
     return redirect(url_for("google_connect"))
 
 
 @app.get("/google/disconnect")
 def google_disconnect():
-    row = AppSetting.query.filter_by(setting_key="google_credentials").first()
+    row = AppSetting.query.filter_by(
+        setting_key="google_credentials"
+    ).first()
+
     if row:
         db.session.delete(row)
         db.session.commit()
+
+    session.pop("oauth_state", None)
+    session.pop("oauth_code_verifier", None)
+
     flash("Google 연결을 해제했습니다.")
     return redirect(url_for("home"))
 
