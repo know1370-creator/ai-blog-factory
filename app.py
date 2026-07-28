@@ -3,7 +3,7 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import (
@@ -11,6 +11,7 @@ from flask import (
     send_from_directory, session, url_for
 )
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect, text
 from markupsafe import Markup
 from openai import OpenAI
 
@@ -55,7 +56,13 @@ class Article(db.Model):
     thumbnail_path = db.Column(db.String(500), nullable=True)
     thumbnail_text = db.Column(db.String(300), nullable=True)
     blogger_post_id = db.Column(db.String(200), nullable=True)
+    blogger_blog_id = db.Column(db.String(200), nullable=True)
+    blogger_url = db.Column(db.String(1000), nullable=True)
     blogger_status = db.Column(db.String(50), nullable=True)
+    scheduled_at = db.Column(db.DateTime, nullable=True)
+    instagram_caption = db.Column(db.Text, default="")
+    threads_text = db.Column(db.Text, default="")
+    shorts_script = db.Column(db.Text, default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -66,8 +73,32 @@ class AppSetting(db.Model):
     setting_value = db.Column(db.Text, default="")
 
 
-with app.app_context():
+def ensure_schema():
+    """Create tables and add V6 columns to an existing database safely."""
     db.create_all()
+    inspector = inspect(db.engine)
+    if "article" not in inspector.get_table_names():
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("article")}
+    dialect = db.engine.dialect.name
+    column_sql = {
+        "blogger_blog_id": "VARCHAR(200)",
+        "blogger_url": "VARCHAR(1000)",
+        "scheduled_at": "TIMESTAMP" if dialect == "postgresql" else "DATETIME",
+        "instagram_caption": "TEXT",
+        "threads_text": "TEXT",
+        "shorts_script": "TEXT",
+    }
+
+    with db.engine.begin() as conn:
+        for name, sql_type in column_sql.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE article ADD COLUMN {name} {sql_type}"))
+
+
+with app.app_context():
+    ensure_schema()
 
 
 def get_setting(key, default=""):
@@ -255,6 +286,109 @@ def get_blogs():
     return data.get("items", [])
 
 
+def article_labels(article):
+    return [
+        item.strip().lstrip("#")
+        for item in (article.tags or "").split(",")
+        if item.strip()
+    ]
+
+
+def article_content_for_blogger(article):
+    content = article.body_html or ""
+    if article.thumbnail_path:
+        public_image_url = url_for(
+            "media", filename=article.thumbnail_path, _external=True
+        )
+        hero = (
+            f'<p><img src="{public_image_url}" alt="{article.title}" '
+            f'style="max-width:100%;height:auto"></p>'
+        )
+        content = hero + content
+    return content
+
+
+def save_blogger_result(article, result, blog_id, mode):
+    article.blogger_post_id = result.get("id") or article.blogger_post_id
+    article.blogger_blog_id = str(blog_id)
+    article.blogger_url = result.get("url") or article.blogger_url
+    article.blogger_status = "Blogger 초안" if mode == "draft" else "Blogger 공개"
+    if mode != "scheduled":
+        article.scheduled_at = None
+    db.session.commit()
+
+
+def upsert_blogger_post(article, blog_id, mode="draft"):
+    service = blogger_service()
+    body = {
+        "title": article.title,
+        "content": article_content_for_blogger(article),
+        "labels": article_labels(article),
+    }
+
+    is_draft = mode == "draft"
+    same_blog = article.blogger_post_id and article.blogger_blog_id == str(blog_id)
+
+    if same_blog:
+        result = service.posts().update(
+            blogId=blog_id,
+            postId=article.blogger_post_id,
+            body=body,
+            publish=not is_draft,
+            revert=is_draft,
+            fetchImages=True,
+        ).execute()
+        action = "업데이트"
+    else:
+        result = service.posts().insert(
+            blogId=blog_id,
+            body=body,
+            isDraft=is_draft,
+            fetchImages=True,
+        ).execute()
+        action = "발행"
+
+    save_blogger_result(article, result, blog_id, mode)
+    return action
+
+
+def generate_social_pack(article):
+    prompt = f"""
+다음 블로그 글을 바탕으로 한국어 SNS 콘텐츠를 만드세요.
+제목: {article.title}
+핵심 키워드: {article.keyword}
+본문 요약: {plain_text_from_html(article.body_html)[:2500]}
+
+규칙:
+1. instagram_caption: 첫 문장 훅, 본문 5~8문장, 마지막 CTA, 해시태그 5~8개.
+2. threads_text: 짧고 대화체로 5~9문장. 과장 금지.
+3. shorts_script: 35~50초 분량. 훅, 장면별 대사, 자막, 마무리 CTA 포함.
+4. 사실을 새로 꾸며내지 마세요.
+
+JSON 하나만 출력하세요.
+{{
+  "instagram_caption": "...",
+  "threads_text": "...",
+  "shorts_script": "..."
+}}
+"""
+    response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
+    raw = strip_code_fence(response.output_text)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.S)
+        if not match:
+            raise RuntimeError("SNS 콘텐츠 응답을 JSON으로 읽지 못했습니다.")
+        return json.loads(match.group(0))
+
+
+def parse_local_datetime(value):
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+
+
 BASE_HTML = """
 <!doctype html>
 <html lang="ko">
@@ -263,13 +397,13 @@ BASE_HTML = """
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ page_title or 'MI Creator Hub' }}</title>
 <style>
-:root{--ink:#202124;--muted:#6b7280;--line:#e5e7eb;--brand:#6d5dfc;--soft:#f6f5ff;--ok:#0f9d58;--bad:#d93025}
+:root{--ink:#202124;--muted:#6b7280;--line:#e5e7eb;--brand:#6d5dfc;--soft:#f6f5ff;--ok:#0f9d58;--bad:#d93025;--warn:#b26a00}
 *{box-sizing:border-box}body{margin:0;background:#f7f8fc;color:var(--ink);font-family:Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
 .wrap{max-width:1040px;margin:34px auto;padding:0 18px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
 h1{margin:0 0 7px;font-size:30px}h2{margin:0 0 18px;font-size:22px}h3{margin:18px 0 8px}.lead,.small{color:var(--muted)}.small{font-size:14px}
 label{font-weight:700;display:block;margin:14px 0 7px}input,textarea,select{width:100%;border:1px solid #ccd0d5;border-radius:10px;padding:12px;font:inherit;background:#fff}textarea{min-height:150px;resize:vertical}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:10px;padding:12px 17px;background:var(--brand);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn.gray{background:#edf0f4;color:#202124}.btn.green{background:var(--ok)}.btn.red{background:var(--bad)}
-.flash{padding:13px 16px;border-radius:10px;background:#fff4d6;border:1px solid #f4cc63;margin-bottom:15px}.status{display:inline-block;padding:5px 9px;border-radius:99px;background:#edf7f0;color:var(--ok);font-size:13px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:10px;padding:12px 17px;background:var(--brand);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn.gray{background:#edf0f4;color:#202124}.btn.green{background:var(--ok)}.btn.red{background:var(--bad)}.btn.orange{background:var(--warn)}
+.flash{padding:13px 16px;border-radius:10px;background:#fff4d6;border:1px solid #f4cc63;margin-bottom:15px}.status{display:inline-block;padding:5px 9px;border-radius:99px;background:#edf7f0;color:var(--ok);font-size:13px;font-weight:700}.status.draft{background:#fff4d6;color:var(--warn)}.status.off{background:#f1f3f4;color:#5f6368}.status.scheduled{background:#eef2ff;color:#4f46e5}
 table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .preview{border:1px solid var(--line);border-radius:12px;padding:20px;line-height:1.75}.thumb-wrap{position:relative;border-radius:15px;overflow:hidden;background:#ddd}.thumb{width:100%;display:block}.thumb-badge{position:absolute;left:5%;bottom:8%;max-width:88%;background:rgba(20,20,20,.78);color:#fff;padding:13px 18px;border-radius:10px;font-weight:800;font-size:clamp(18px,3vw,34px)}
 .score{font-size:46px;font-weight:900}.check{padding:10px 0;border-bottom:1px solid var(--line)}.pass{color:var(--ok);font-weight:800}.fail{color:var(--bad);font-weight:800}.tags{display:flex;gap:7px;flex-wrap:wrap}.tag{background:var(--soft);color:#5046b8;padding:7px 10px;border-radius:99px}
@@ -294,7 +428,7 @@ def home():
     google_connected = bool(get_setting("google_credentials"))
     return page("""
 <div class="card">
-<h1>MI Creator Hub <span class="status">V5.1</span></h1>
+<h1>MI Creator Hub <span class="status">V6.0</span></h1>
 <p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행까지 한 흐름으로 만들어요.</p>
 </div>
 
@@ -337,7 +471,12 @@ def home():
 <table><thead><tr><th>제목</th><th>SEO</th><th>상태</th><th></th></tr></thead><tbody>
 {% for a in articles %}<tr>
 <td><strong>{{a.title}}</strong><div class="small">{{a.keyword}} · {{a.created_at.strftime('%Y-%m-%d %H:%M')}}</div></td>
-<td>{{a.seo_score}}점</td><td>{{a.blogger_status or '저장됨'}}</td>
+<td>{{a.seo_score}}점</td><td>
+{% if a.scheduled_at %}<span class="status scheduled">예약됨</span>
+{% elif a.blogger_status == 'Blogger 공개' %}<span class="status">공개됨</span>
+{% elif a.blogger_status == 'Blogger 초안' %}<span class="status draft">초안</span>
+{% else %}<span class="status off">미발행</span>{% endif %}
+</td>
 <td><a class="btn gray" href="{{url_for('edit_article',article_id=a.id)}}">열기·수정</a></td>
 </tr>{% endfor %}
 </tbody></table>
@@ -448,13 +587,34 @@ def edit_article(article_id):
 <section class="card"><h2>미리보기</h2><div class="preview"><h1>{{a.title}}</h1>{{a.body_html|safe}}</div></section>
 
 <section class="card">
-<h2>Blogger 보내기</h2><p class="small">처음에는 초안으로 보내 확인하는 것을 권장해요.</p>
+<h2>SNS 변환</h2>
+<p class="small">블로그 글을 인스타그램, Threads, 쇼츠용으로 한 번에 바꿉니다.</p>
+<form method="post" action="{{url_for('generate_social_route',article_id=a.id)}}">
+<div class="actions"><button class="btn" type="submit">SNS 콘텐츠 자동 생성</button></div>
+</form>
+{% if a.instagram_caption %}<label>인스타그램 캡션</label><textarea readonly>{{a.instagram_caption}}</textarea>{% endif %}
+{% if a.threads_text %}<label>Threads 글</label><textarea readonly>{{a.threads_text}}</textarea>{% endif %}
+{% if a.shorts_script %}<label>쇼츠 대본</label><textarea readonly style="min-height:240px">{{a.shorts_script}}</textarea>{% endif %}
+</section>
+
+<section class="card">
+<h2>Blogger 발행</h2>
+{% if a.blogger_url %}<p><a class="btn gray" href="{{a.blogger_url}}" target="_blank" rel="noopener">발행된 글 바로가기</a></p>{% endif %}
+<p class="small">처음에는 초안으로 확인하고, 이후 같은 블로그에 다시 보내면 기존 글이 업데이트됩니다.</p>
 {% if blogs %}
 <form method="post" action="{{url_for('publish_blogger',article_id=a.id)}}">
-<label>블로그 선택</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}">{{b.name}}</option>{% endfor %}</select>
-<label>발행 방식</label><select name="mode"><option value="draft">초안으로 보내기</option><option value="publish">바로 공개 발행</option></select>
-<div class="actions"><button class="btn green" type="submit">Blogger로 보내기</button></div>
+<label>블로그 선택</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}" {{'selected' if a.blogger_blog_id == b.id else ''}}>{{b.name}}</option>{% endfor %}</select>
+<label>발행 방식</label><select name="mode"><option value="draft">초안으로 저장</option><option value="publish">바로 공개 발행</option></select>
+<div class="actions"><button class="btn green" type="submit">{{'Blogger 글 업데이트' if a.blogger_post_id else 'Blogger로 보내기'}}</button></div>
 </form>
+
+<form method="post" action="{{url_for('schedule_blogger',article_id=a.id)}}">
+<label>예약 발행 시간</label><input type="datetime-local" name="scheduled_at" required>
+<label>예약할 블로그</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}">{{b.name}}</option>{% endfor %}</select>
+<div class="actions"><button class="btn orange" type="submit">공개 발행 예약</button>
+{% if a.scheduled_at %}<button class="btn gray" type="submit" formaction="{{url_for('cancel_schedule',article_id=a.id)}}" formnovalidate>예약 취소</button>{% endif %}</div>
+</form>
+{% if a.scheduled_at %}<p class="small">현재 예약: {{a.scheduled_at.strftime('%Y-%m-%d %H:%M')}}</p>{% endif %}
 {% else %}<p>홈 화면에서 Google Blogger를 먼저 연결해 주세요.</p><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a>{% endif %}
 </section>
 """, a=article, seo_report=seo_report, tags=tags, blogs=blogs,
@@ -598,38 +758,86 @@ def publish_blogger(article_id):
     try:
         blog_id = request.form["blog_id"]
         mode = request.form.get("mode", "draft")
-        content = article.body_html
-        if article.thumbnail_path:
-            public_image_url = url_for("media", filename=article.thumbnail_path, _external=True)
-            hero = (
-                f'<p><img src="{public_image_url}" alt="{article.title}" '
-                f'style="max-width:100%;height:auto"></p>'
-            )
-            content = hero + content
-
-        labels = [x.strip().lstrip("#") for x in (article.tags or "").split(",") if x.strip()]
-        body = {"title": article.title, "content": content, "labels": labels}
-        service = blogger_service()
-        result = service.posts().insert(
-            blogId=blog_id,
-            body=body,
-            isDraft=(mode == "draft"),
-            fetchImages=True,
-        ).execute()
-
-        article.blogger_post_id = result.get("id")
-        article.blogger_status = "Blogger 초안" if mode == "draft" else "Blogger 공개"
-        db.session.commit()
-        flash(f"{article.blogger_status}으로 보냈습니다.")
+        action = upsert_blogger_post(article, blog_id, mode)
+        flash(f"Blogger {action}이 완료됐어요. 상태: {article.blogger_status}")
     except Exception as e:
         db.session.rollback()
         flash(f"Blogger 발행 실패: {e}")
     return redirect(url_for("edit_article", article_id=article.id))
 
 
+@app.post("/articles/<int:article_id>/social")
+def generate_social_route(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        data = generate_social_pack(article)
+        article.instagram_caption = data.get("instagram_caption", "")
+        article.threads_text = data.get("threads_text", "")
+        article.shorts_script = data.get("shorts_script", "")
+        db.session.commit()
+        flash("인스타그램, Threads, 쇼츠용 콘텐츠를 만들었어요.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"SNS 콘텐츠 생성 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
+@app.post("/articles/<int:article_id>/schedule")
+def schedule_blogger(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        scheduled_at = parse_local_datetime(request.form.get("scheduled_at"))
+        if not scheduled_at or scheduled_at <= datetime.now():
+            raise RuntimeError("현재 시간보다 뒤의 예약 시간을 선택해 주세요.")
+        article.scheduled_at = scheduled_at
+        article.blogger_blog_id = request.form["blog_id"]
+        article.blogger_status = "Blogger 예약"
+        db.session.commit()
+        flash(f"{scheduled_at.strftime('%Y-%m-%d %H:%M')} 공개 발행으로 예약했어요.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"예약 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
+@app.post("/articles/<int:article_id>/schedule/cancel")
+def cancel_schedule(article_id):
+    article = Article.query.get_or_404(article_id)
+    article.scheduled_at = None
+    article.blogger_status = "Blogger 공개" if article.blogger_url else None
+    db.session.commit()
+    flash("예약을 취소했어요.")
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
+@app.route("/tasks/publish-due", methods=["GET", "POST"])
+def publish_due_articles():
+    expected = os.getenv("CRON_SECRET", "")
+    supplied = request.headers.get("X-Cron-Secret") or request.args.get("secret", "")
+    if not expected or not secrets.compare_digest(expected, supplied):
+        return {"ok": False, "error": "unauthorized"}, 401
+
+    due = Article.query.filter(
+        Article.scheduled_at.isnot(None),
+        Article.scheduled_at <= datetime.now(),
+    ).all()
+
+    published = []
+    failed = []
+    for article in due:
+        try:
+            upsert_blogger_post(article, article.blogger_blog_id, "publish")
+            published.append(article.id)
+        except Exception as e:
+            db.session.rollback()
+            failed.append({"id": article.id, "error": str(e)})
+
+    return {"ok": True, "published": published, "failed": failed}
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "5.1"}
+    return {"status": "ok", "version": "6.0"}
 
 
 if __name__ == "__main__":
