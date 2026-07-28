@@ -1,54 +1,32 @@
-# MI Creator Hub V9.0
+# MI Creator Hub V9.1
 
-V9.0 is a compatibility-first modular migration of the verified V8.0 app.
+V9.1 adds a practical revenue and ROI dashboard while preserving all V9.0 features.
 
-## Deploy on Render
+## New features
 
-1. Upload all files and folders to the repository root.
-2. Keep the start command as `gunicorn app:app`.
-3. Preserve the existing Render environment variables and database.
-4. Deploy.
-5. Check:
-   - `/health` → version 9.0
-   - `/v9/status` → modular-foundation status
+- Monthly revenue dashboard
+- AdSense, Coupang, Atomy, and other-income entries
+- OpenAI, hosting, and other-cost entries
+- Monthly net profit calculation
+- Average operating cost per generated article
+- Recent finance-entry history and deletion
+- New route: `/business/`
 
-## Why compatibility-first?
+## Safe deployment
 
-A full one-step rewrite can accidentally break Blogger OAuth, publishing,
-database migrations, scheduling, or existing article records. V9.0 therefore
-keeps the tested application running in `creator_hub/legacy_app.py`, while
-introducing stable module boundaries for services, models, configuration,
-routes, templates, and static files.
+Upload the project files to the existing repository and deploy the latest commit.
+Keep the existing Render environment variables and database.
 
-The next extraction steps can move one feature at a time:
-1. Dashboard and analytics
-2. AI writer and ideas
-3. Blogger and scheduling
-4. Monetization
-5. Templates and static assets
-
-## Project structure
+Render start command:
 
 ```text
-app.py
-creator_hub/
-  __init__.py
-  config.py
-  extensions.py
-  models.py
-  legacy_app.py
-  routes/
-    system.py
-  services/
-    ai_service.py
-    seo_service.py
-    blogger_service.py
-    affiliate_service.py
-    analytics_service.py
-  templates/
-  static/
-requirements.txt
-Procfile
-render.yaml
-.env.example
+gunicorn app:app
 ```
+
+Check after deployment:
+
+- `/health` should show version `9.1`
+- `/v9/status` should show `modular-foundation-v9.1`
+- `/business/` should open the new dashboard
+
+The `finance_entry` table is created automatically. Existing article and Blogger data are not deleted.
