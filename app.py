@@ -294,7 +294,7 @@ def home():
     google_connected = bool(get_setting("google_credentials"))
     return page("""
 <div class="card">
-<h1>MI Creator Hub <span class="status">V5</span></h1>
+<h1>MI Creator Hub <span class="status">V5.1</span></h1>
 <p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행까지 한 흐름으로 만들어요.</p>
 </div>
 
@@ -321,7 +321,10 @@ def home():
 <h3>Google Blogger</h3><p class="small">내 블로그 목록 불러오기와 발행</p>
 {% if google_connected %}
 <p><span class="status">연결됨</span></p>
-<div class="actions"><a class="btn gray" href="{{url_for('google_disconnect')}}">연결 해제</a></div>
+<div class="actions">
+<a class="btn" href="{{url_for('google_change_account')}}">Google 계정 변경</a>
+<a class="btn gray" href="{{url_for('google_disconnect')}}">연결 해제</a>
+</div>
 {% else %}
 <div class="actions"><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a></div>
 {% endif %}
@@ -496,7 +499,7 @@ def google_connect():
         authorization_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
-            prompt="consent",
+            prompt="select_account consent",
         )
         session["oauth_state"] = state
         return redirect(authorization_url)
@@ -521,6 +524,17 @@ def google_callback():
     except Exception as e:
         flash(f"Google 연결 실패: {e}")
     return redirect(url_for("home"))
+
+
+@app.get("/google/change-account")
+def google_change_account():
+    row = AppSetting.query.filter_by(setting_key="google_credentials").first()
+    if row:
+        db.session.delete(row)
+        db.session.commit()
+    session.pop("oauth_state", None)
+    flash("기존 Google 연결을 해제했습니다. 사용할 계정을 다시 선택해 주세요.")
+    return redirect(url_for("google_connect"))
 
 
 @app.get("/google/disconnect")
@@ -570,7 +584,7 @@ def publish_blogger(article_id):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "5.0"}
+    return {"status": "ok", "version": "5.1"}
 
 
 if __name__ == "__main__":

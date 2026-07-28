@@ -1,6 +1,12 @@
-# MI Creator Hub V5
+# MI Creator Hub V5.1
 
-## 이번 버전 기능
+## V5.1 추가 기능
+
+- Google 계정 변경 버튼
+- 기존 Blogger 인증정보 삭제 후 다른 계정 재연결
+- Google 로그인 때 계정 선택창 강제 표시
+
+## 기존 기능
 
 - AI 한국어 SEO 블로그 글 생성
 - 제목·메타 설명·본문 HTML 수정
@@ -74,7 +80,7 @@ Manual Deploy → Deploy latest commit
 배포 완료 후 `/health`에서 아래 응답이 보이면 정상입니다.
 
 ```json
-{"status":"ok","version":"5.0"}
+{"status":"ok","version":"5.1"}
 ```
 
 ## 중요한 저장소 안내
