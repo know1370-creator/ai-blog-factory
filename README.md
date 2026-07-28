@@ -1,90 +1,54 @@
-# MI Creator Hub V5.1
+# MI Creator Hub V9.0
 
-## V5.1 추가 기능
+V9.0 is a compatibility-first modular migration of the verified V8.0 app.
 
-- Google 계정 변경 버튼
-- 기존 Blogger 인증정보 삭제 후 다른 계정 재연결
-- Google 로그인 때 계정 선택창 강제 표시
+## Deploy on Render
 
-## 기존 기능
+1. Upload all files and folders to the repository root.
+2. Keep the start command as `gunicorn app:app`.
+3. Preserve the existing Render environment variables and database.
+4. Deploy.
+5. Check:
+   - `/health` → version 9.0
+   - `/v9/status` → modular-foundation status
 
-- AI 한국어 SEO 블로그 글 생성
-- 제목·메타 설명·본문 HTML 수정
-- SEO 점수와 보완 항목 자동 분석
-- AI 태그 자동 생성
-- GPT 이미지 모델로 실제 썸네일 생성
-- PostgreSQL 영구 저장 지원
-- Google Blogger OAuth 연결
-- Blogger 초안 또는 즉시 공개 발행
-- 대표 이미지 자동 삽입
+## Why compatibility-first?
 
-## GitHub에 올릴 파일
+A full one-step rewrite can accidentally break Blogger OAuth, publishing,
+database migrations, scheduling, or existing article records. V9.0 therefore
+keeps the tested application running in `creator_hub/legacy_app.py`, while
+introducing stable module boundaries for services, models, configuration,
+routes, templates, and static files.
 
-기존 저장소에서 아래 파일을 교체하거나 추가하세요.
+The next extraction steps can move one feature at a time:
+1. Dashboard and analytics
+2. AI writer and ideas
+3. Blogger and scheduling
+4. Monetization
+5. Templates and static assets
 
-- `app.py`
-- `requirements.txt`
-- `Procfile`
-- `README.md`
-
-`media` 폴더는 실행 중 자동 생성됩니다.
-
-## Render 환경변수
-
-필수:
-
-- `OPENAI_API_KEY`
-- `SECRET_KEY`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-
-권장:
-
-- `DATABASE_URL`
-- `OPENAI_MODEL` 기본값: `gpt-5-mini`
-- `IMAGE_MODEL` 기본값: `gpt-image-1`
-
-## PostgreSQL 연결
-
-1. Render Dashboard에서 **New → PostgreSQL**을 선택합니다.
-2. 데이터베이스를 생성합니다.
-3. 생성된 **Internal Database URL**을 복사합니다.
-4. 웹 서비스의 Environment에 아래처럼 추가합니다.
+## Project structure
 
 ```text
-DATABASE_URL = 복사한 Internal Database URL
+app.py
+creator_hub/
+  __init__.py
+  config.py
+  extensions.py
+  models.py
+  legacy_app.py
+  routes/
+    system.py
+  services/
+    ai_service.py
+    seo_service.py
+    blogger_service.py
+    affiliate_service.py
+    analytics_service.py
+  templates/
+  static/
+requirements.txt
+Procfile
+render.yaml
+.env.example
 ```
-
-앱은 시작 시 필요한 테이블을 자동 생성합니다.
-
-## Google Cloud 설정
-
-1. Google Cloud에서 Blogger API v3를 활성화합니다.
-2. OAuth 클라이언트 유형은 **웹 애플리케이션**으로 만듭니다.
-3. 승인된 리디렉션 URI에 아래 주소를 정확히 추가합니다.
-
-```text
-https://ai-blog-factory.onrender.com/oauth2callback
-```
-
-4. Render의 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`에는 반드시 같은 OAuth 클라이언트에서 복사한 값을 넣습니다.
-
-## 배포
-
-GitHub에 파일 업로드 후 Render에서:
-
-```text
-Manual Deploy → Deploy latest commit
-```
-
-배포 완료 후 `/health`에서 아래 응답이 보이면 정상입니다.
-
-```json
-{"status":"ok","version":"5.1"}
-```
-
-## 중요한 저장소 안내
-
-PostgreSQL을 연결하면 글 데이터는 배포 후에도 유지됩니다.
-
-현재 생성 이미지 파일은 Render의 로컬 디스크에 저장되므로 재배포 시 사라질 수 있습니다. 글과 썸네일 기록은 유지되지만 이미지까지 영구 보관하려면 다음 버전에서 Cloudinary 또는 S3를 연결하는 것이 안전합니다.
