@@ -33,6 +33,10 @@ def create_app() -> Flask:
     if "diagnostics_v95" not in app.blueprints:
         app.register_blueprint(diagnostics_bp)
 
+    from .routes.social import social_bp
+    if "social_v96" not in app.blueprints:
+        app.register_blueprint(social_bp)
+
     with app.app_context():
         db.create_all()
 

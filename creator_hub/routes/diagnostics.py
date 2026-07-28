@@ -10,6 +10,7 @@ from ..legacy_app import BASE_HTML, Article, db
 from .business import FinanceEntry
 from .planner import WeeklyPlanItem
 from .analytics import ContentMetric
+from .social import SocialInteraction
 
 
 diagnostics_bp = Blueprint("diagnostics_v95", __name__, url_prefix="/diagnostics")
@@ -39,6 +40,7 @@ def dashboard():
         ("수익 테이블", FinanceEntry),
         ("주간 플래너 테이블", WeeklyPlanItem),
         ("성과 분석 테이블", ContentMetric),
+        ("소통 비서 테이블", SocialInteraction),
     ]
     for label, model in model_checks:
         try:

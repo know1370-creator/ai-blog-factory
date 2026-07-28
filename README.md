@@ -1,33 +1,42 @@
-# MI Creator Hub V9.5
+# MI Creator Hub V9.6
 
-V9.5 adds manual content performance analytics and a safe system diagnostics page.
+V9.6 adds an approval-only AI engagement assistant.
 
-## New screens
+## New screen
 
-- `/analytics/`
-  - Record views, likes, comments, saves, shares, clicks, and revenue
-  - Compare channel performance
-  - Receive recommendations based only on entered data
-  - Delete incorrect records
+- `/social/`
 
-- `/diagnostics/`
-  - Database connection check
-  - Required table checks
-  - Environment-variable presence checks
-  - Secret values are never displayed
-  - No OpenAI request is made, so the check does not create API cost
+## Features
+
+- Manually register Instagram, Threads, YouTube, or blog comments and inquiries
+- Basic local classification without API cost
+- AI classification into purchase inquiry, collaboration, question, compliment, complaint, spam, or general
+- Priority marking for messages that should be answered first
+- Generate three Korean reply drafts
+- Select or edit a reply
+- Explicit approval step
+- Mark as completed after the user manually posts the reply
+- Filter inbox by workflow status
+
+## Safety design
+
+- No automatic likes
+- No automatic comments
+- No unofficial login automation
+- No social-media password storage
+- No reply is externally posted in V9.6
+- The user remains in control of every external message
 
 ## Deployment
 
-Upload the extracted files over the existing GitHub repository.
+Extract the ZIP and overwrite the existing repository files.
 Do not delete the database or Render environment variables.
 
 ## Verification
 
-- `/health` returns version `9.5`
-- `/v9/status` returns `modular-foundation-v9.5`
-- `/analytics/` opens normally
-- `/diagnostics/` opens normally
-- `/calendar/` remains available
+- `/health` returns version `9.6`
+- `/v9/status` returns `modular-foundation-v9.6`
+- `/social/` opens normally
+- `/diagnostics/` shows the social assistant table as available
 
-The new `content_metric` table is created automatically.
+The new `social_interaction` table is created automatically.
