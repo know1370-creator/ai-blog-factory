@@ -1,369 +1,483 @@
 import base64
-import html
 import json
 import os
+import re
 import secrets
-import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlencode
 
-import requests
-from flask import Flask, flash, redirect, render_template_string, request, send_from_directory, session, url_for
-from werkzeug.middleware.proxy_fix import ProxyFix
+from flask import (
+    Flask, flash, redirect, render_template_string, request,
+    send_from_directory, session, url_for
+)
+from flask_sqlalchemy import SQLAlchemy
+from markupsafe import Markup
+from openai import OpenAI
+
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = Path(os.getenv("DB_PATH", "/tmp/mi_creator_hub.db"))
-MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/tmp/mi_creator_hub_media"))
-GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger"
+MEDIA_DIR = BASE_DIR / "media"
+MEDIA_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY") or os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-STYLE = r'''
-:root{--bg:#f5f7fb;--card:#fff;--ink:#182033;--muted:#667085;--line:#e5e9f2;--accent:#6d5dfc;--accent2:#5145cd;--good:#067647;--warn:#b54708}
-*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f3f0ff 0,#f7f8fc 260px);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}.wrap{max-width:940px;margin:auto;padding:18px}.hero{padding:25px 2px 17px}.hero h1{margin:0;font-size:30px;letter-spacing:-1px}.hero p{color:var(--muted);margin:8px 0 0}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px;box-shadow:0 8px 30px rgba(35,28,90,.06)}h2{font-size:20px;margin:0 0 12px}label{display:block;font-weight:750;margin:12px 0 7px}input,select,textarea{width:100%;padding:13px;border:1px solid #d0d5dd;border-radius:12px;font-size:16px;background:#fff;color:var(--ink)}textarea{min-height:115px;resize:vertical}.editor{min-height:470px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 16px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff}.btn:hover{background:var(--accent2)}.btn.light{background:#eef0f6;color:#252b3b}.btn.good{background:#067647}.btn.danger{background:#b42318}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.notice{padding:12px 14px;border-radius:12px;background:#fff4e5;border:1px solid #fedf89;margin-bottom:14px}.notice.ok{background:#ecfdf3;border-color:#abefc6}.article{border-top:1px solid var(--line);padding:15px 0}.article:first-child{border-top:0}.article h3{margin:0 0 6px;font-size:18px}.meta{font-size:13px;color:var(--muted)}.status{display:inline-block;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;font-weight:700}.status.on{background:#ecfdf3;color:var(--good)}.status.off{background:#fff4e5;color:var(--warn)}.connection{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}.connection:first-of-type{border-top:0}.preview{line-height:1.75}.preview h2{margin-top:28px}.preview h3{margin-top:22px}.preview img{max-width:100%;border-radius:16px}.thumb{width:100%;aspect-ratio:1200/630;object-fit:cover;border-radius:16px;border:1px solid var(--line)}.thumb-wrap{position:relative}.thumb-badge{position:absolute;left:16px;bottom:16px;right:16px;background:rgba(15,23,42,.72);color:#fff;padding:12px 14px;border-radius:12px;font-weight:850;font-size:22px;backdrop-filter:blur(4px)}.small{font-size:13px;color:var(--muted)}
-@media(max-width:640px){.grid{grid-template-columns:1fr}.hero h1{font-size:26px}.wrap{padding:13px}.card{padding:15px;border-radius:17px}.btn{width:100%}.actions form{width:100%}.actions form .btn{width:100%}.connection{align-items:flex-start;flex-direction:column}}
-'''
+database_url = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'creator.db'}")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 
-PAGE = r'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MI Creator Hub</title><style>''' + STYLE + r'''</style></head><body><main class="wrap">
-<section class="hero"><h1>MI Creator Hub</h1><p>키워드 하나로 글을 만들고, 확인한 뒤 Blogger에 발행해요.</p></section>
-{% with messages=get_flashed_messages(with_categories=true) %}{% for cat,msg in messages %}<div class="notice {{'ok' if cat=='ok' else ''}}">{{msg}}</div>{% endfor %}{% endwith %}
-<section class="card"><h2>1. 새 글 만들기</h2><form method="post" action="{{url_for('generate')}}">
-<label>키워드</label><input name="keyword" required placeholder="예: 초등학생 여름방학 간식">
-<div class="grid"><div><label>브랜드 스타일</label><select name="brand"><option>육아·생활</option><option>보험 정보</option><option>애터미 후기</option><option>쿠팡 구매가이드</option><option>일반 정보</option></select></div><div><label>글 유형</label><select name="article_type"><option>정보형</option><option>후기형</option><option>비교형</option><option>구매 가이드</option></select></div></div>
-<div class="grid"><div><label>분량</label><select name="length"><option value="1800">약 1,800자</option><option value="2500" selected>약 2,500자</option><option value="3500">약 3,500자</option></select></div><div><label>독자</label><input name="audience" placeholder="예: 초등학생 자녀를 둔 부모"></div></div>
-<label>내 경험·꼭 넣을 내용</label><textarea name="experience" placeholder="직접 사용한 느낌, 주의점, 가격 등. 모르는 사실은 비워두세요."></textarea>
-<div class="actions"><button class="btn" type="submit">AI 글 생성</button></div></form></section>
-<section class="card"><h2>2. 연결 상태</h2>
-<div class="connection"><div><strong>OpenAI</strong><div class="small">AI 글 생성용</div></div><span class="status {{'on' if openai_ready else 'off'}}">{{'연결됨' if openai_ready else '미연결'}}</span></div>
-<div class="connection"><div><strong>Google Blogger</strong><div class="small">내 블로그 목록 불러오기와 발행</div></div>{% if google_ready %}<div class="actions"><span class="status on">연결됨</span><a class="btn light" href="{{url_for('google_disconnect')}}">연결 해제</a></div>{% else %}<a class="btn" href="{{url_for('google_login')}}">Google 연결</a>{% endif %}</div>
-{% if google_ready and blogs %}<form method="post" action="{{url_for('choose_blog')}}"><label>발행할 Blogger 선택</label><div class="grid"><select name="blog_id">{% for b in blogs %}<option value="{{b['id']}}" {{'selected' if b['id']==selected_blog_id else ''}}>{{b['name']}}</option>{% endfor %}</select><button class="btn good" type="submit">이 블로그 사용</button></div></form>{% endif %}
-</section>
-<section class="card"><h2>저장된 글</h2>{% if not articles %}<p class="meta">아직 글이 없습니다. 위에서 첫 글을 만들어보세요.</p>{% endif %}{% for a in articles %}<article class="article"><h3>{{a['title']}}</h3><div class="meta">{{a['keyword']}} · {{a['created_at']}} · {{a['status']}}</div><div class="actions"><a class="btn light" href="{{url_for('edit',article_id=a['id'])}}">열기·수정</a></div></article>{% endfor %}</section>
-</main></body></html>'''
+db = SQLAlchemy(app)
 
-EDIT_PAGE = r'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>글 수정</title><style>''' + STYLE + r'''</style></head><body><main class="wrap"><section class="hero"><h1>글 확인 및 수정</h1><p><a href="/">← 홈으로</a></p></section>
-{% with messages=get_flashed_messages(with_categories=true) %}{% for cat,msg in messages %}<div class="notice {{'ok' if cat=='ok' else ''}}">{{msg}}</div>{% endfor %}{% endwith %}
-<section class="card"><form method="post" action="{{url_for('save',article_id=a['id'])}}"><label>제목</label><input name="title" value="{{a['title']}}"><label>메타 설명</label><input name="meta_description" value="{{a['meta_description'] or ''}}"><label>본문 HTML</label><textarea class="editor" name="content_html">{{a['content_html']}}</textarea><div class="actions"><button class="btn" type="submit">수정 내용 저장</button></div></form></section>
-<section class="card"><h2>AI 썸네일</h2>
-{% if a['thumbnail_path'] %}<div class="thumb-wrap"><img class="thumb" src="{{url_for('media',filename=a['thumbnail_path'])}}" alt="{{a['title']}}"><div class="thumb-badge">{{a['thumbnail_text'] or a['title']}}</div></div>{% else %}<p class="small">아직 썸네일이 없습니다. 아래 버튼을 누르면 글 내용에 맞는 가로형 대표 이미지를 만들어요.</p>{% endif %}
-<form method="post" action="{{url_for('generate_thumbnail_route',article_id=a['id'])}}"><label>썸네일 문구</label><input name="thumbnail_text" value="{{a['thumbnail_text'] or a['title']}}" maxlength="45"><label>이미지 분위기</label><select name="thumbnail_style"><option>따뜻한 생활 사진</option><option>깔끔한 매거진</option><option>밝은 일러스트</option><option>전문적인 인포그래픽</option></select><div class="actions"><button class="btn" type="submit">{{'썸네일 다시 만들기' if a['thumbnail_path'] else 'AI 썸네일 만들기'}}</button></div></form>
-{% if a['thumbnail_path'] %}<div class="actions"><a class="btn light" href="{{url_for('media',filename=a['thumbnail_path'])}}" target="_blank">이미지 크게 보기</a></div>{% endif %}</section>
-<section class="card"><h2>미리보기</h2>{% if a['thumbnail_path'] %}<p><img src="{{url_for('media',filename=a['thumbnail_path'],_external=False)}}" alt="{{a['title']}}"></p>{% endif %}<div class="preview">{{a['content_html']|safe}}</div></section>
-<section class="card"><h2>Blogger 보내기</h2><p class="small">처음에는 ‘초안’으로 보내 확인하는 것을 권장해요.</p><div class="actions"><form method="post" action="{{url_for('publish',article_id=a['id'])}}"><input type="hidden" name="draft" value="true"><button class="btn light" type="submit">Blogger 초안으로 보내기</button></form><form method="post" action="{{url_for('publish',article_id=a['id'])}}"><input type="hidden" name="draft" value="false"><button class="btn good" type="submit">바로 공개 발행</button></form></div></section>
-</main></body></html>'''
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
+GOOGLE_SCOPES = ["https://www.googleapis.com/auth/blogger"]
 
 
-def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+class Article(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    keyword = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    meta_description = db.Column(db.Text, default="")
+    body_html = db.Column(db.Text, default="")
+    brand_style = db.Column(db.String(100), default="육아·생활")
+    article_type = db.Column(db.String(100), default="정보형")
+    audience = db.Column(db.String(300), default="")
+    notes = db.Column(db.Text, default="")
+    tags = db.Column(db.Text, default="")
+    seo_score = db.Column(db.Integer, default=0)
+    seo_report = db.Column(db.Text, default="{}")
+    thumbnail_path = db.Column(db.String(500), nullable=True)
+    thumbnail_text = db.Column(db.String(300), nullable=True)
+    blogger_post_id = db.Column(db.String(200), nullable=True)
+    blogger_status = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with db() as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS articles(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            keyword TEXT NOT NULL,
-            title TEXT NOT NULL,
-            meta_description TEXT,
-            content_html TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'saved',
-            blogger_post_id TEXT,
-            blogger_url TEXT,
-            thumbnail_path TEXT,
-            thumbnail_text TEXT,
-            thumbnail_prompt TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS settings(
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS oauth_tokens(
-            provider TEXT PRIMARY KEY,
-            access_token TEXT NOT NULL,
-            refresh_token TEXT,
-            expires_at TEXT,
-            token_type TEXT
-        )''')
-        # 이전 버전 DB를 그대로 써도 동작하도록 누락 열을 보완합니다.
-        columns = {r[1] for r in conn.execute("PRAGMA table_info(articles)").fetchall()}
-        if "blogger_url" not in columns:
-            conn.execute("ALTER TABLE articles ADD COLUMN blogger_url TEXT")
-        if "thumbnail_path" not in columns:
-            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_path TEXT")
-        if "thumbnail_text" not in columns:
-            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_text TEXT")
-        if "thumbnail_prompt" not in columns:
-            conn.execute("ALTER TABLE articles ADD COLUMN thumbnail_prompt TEXT")
+class AppSetting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    setting_key = db.Column(db.String(100), unique=True, nullable=False)
+    setting_value = db.Column(db.Text, default="")
 
 
-def set_setting(key, value):
-    with db() as conn:
-        conn.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+with app.app_context():
+    db.create_all()
 
 
 def get_setting(key, default=""):
-    with db() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-    return row["value"] if row else default
+    row = AppSetting.query.filter_by(setting_key=key).first()
+    return row.setting_value if row else default
 
 
-def extract_output_text(payload):
-    if payload.get("output_text"):
-        return payload["output_text"]
-    chunks = []
-    for item in payload.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in ("output_text", "text"):
-                chunks.append(content.get("text", ""))
-    return "".join(chunks)
+def set_setting(key, value):
+    row = AppSetting.query.filter_by(setting_key=key).first()
+    if not row:
+        row = AppSetting(setting_key=key)
+        db.session.add(row)
+    row.setting_value = value
+    db.session.commit()
 
 
-def clean_json(text):
-    text = text.strip()
-    if text.startswith("```"):
-        first_newline = text.find("\n")
-        text = text[first_newline + 1:] if first_newline >= 0 else text
-        if text.endswith("```"):
-            text = text[:-3]
-    start, end = text.find("{"), text.rfind("}")
-    if start < 0 or end < 0:
-        raise RuntimeError("AI 응답을 글 형식으로 읽지 못했습니다. 다시 시도해 주세요.")
-    return json.loads(text[start:end + 1])
+def openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Render 환경변수에 OPENAI_API_KEY가 없습니다.")
+    return OpenAI(api_key=api_key)
 
 
-def generate_article(keyword, brand, article_type, length, audience, experience):
-    key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다.")
-    brand_rules = {
-        "육아·생활": "따뜻하고 현실적인 부모 시점. 과도한 감성 표현 없이 바로 써먹을 팁 중심.",
-        "보험 정보": "정확하고 신중한 정보형 문체. 가입을 단정하거나 불안을 과장하지 말고 상품별 약관 확인을 안내.",
-        "애터미 후기": "생활 속 사용 경험 중심. 효능을 의학적으로 단정하지 말고 광고성 과장을 피함.",
-        "쿠팡 구매가이드": "선택 기준과 장단점 중심. 실제 가격이나 재고를 모르면 특정 수치를 꾸며내지 않음.",
-        "일반 정보": "명료하고 친절한 한국어 정보형 문체."
-    }
-    prompt = f'''당신은 한국어 SEO 블로그 편집자입니다. 다음 조건으로 게시 전 검토용 초안을 작성하세요.
+def strip_code_fence(text):
+    text = (text or "").strip()
+    text = re.sub(r"^```(?:json|html)?\s*", "", text, flags=re.I)
+    text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def generate_article(keyword, brand_style, article_type, length, audience, notes):
+    prompt = f"""
+당신은 한국어 SEO 블로그 전문 작가입니다.
+아래 조건으로 사실을 꾸며내지 않는 실용적인 블로그 글을 작성하세요.
 
 키워드: {keyword}
-브랜드 스타일: {brand}
-문체 지침: {brand_rules.get(brand, brand_rules['일반 정보'])}
+브랜드 스타일: {brand_style}
 글 유형: {article_type}
-목표 분량: 약 {length}자
-주 독자: {audience or '일반 독자'}
-작성자의 실제 경험 및 메모: {experience or '제공되지 않음'}
+분량: {length}
+독자: {audience or '일반 독자'}
+직접 경험 또는 반드시 포함할 내용: {notes or '없음'}
 
-필수 규칙:
-1. 확인되지 않은 경험, 가격, 통계, 제품 효과를 꾸며내지 마세요.
-2. 최신 확인이 필요한 내용에는 자연스럽게 '공식 정보에서 최신 내용을 확인하세요'라고 안내하세요.
-3. 제목은 핵심 키워드를 억지스럽지 않게 포함하고 클릭 유도 과장은 피하세요.
-4. 도입부, H2 소제목 4~6개, 필요할 때 H3, 체크리스트 또는 목록, FAQ 3개, 결론을 포함하세요.
-5. 본문 HTML은 h2, h3, p, ul, ol, li, strong, blockquote 태그만 사용하세요. script, style, a, img 태그는 사용하지 마세요.
-6. 글만 읽어도 도움이 되도록 구체적으로 쓰되 같은 문장을 반복하지 마세요.
-7. 반드시 아래 JSON 객체 하나만 반환하세요.
+작성 규칙:
+1. 제목은 자연스럽고 핵심 키워드를 포함합니다.
+2. 메타 설명은 80~150자 정도로 작성합니다.
+3. 본문은 HTML만 사용합니다. h2, h3, p, ul, ol, li, strong 태그를 중심으로 구성합니다.
+4. 서론, 핵심 설명, 실용 팁, FAQ 3개, 결론을 포함합니다.
+5. 확인하지 않은 가격, 통계, 인증, 효능은 단정하지 않습니다.
+6. 과장 광고나 의료적 확정 표현을 사용하지 않습니다.
+7. 태그는 # 없이 한국어 중심으로 5~8개 작성합니다.
 
-{{"title":"제목","meta_description":"검색 결과에 보일 110~150자 설명","content_html":"HTML 본문"}}'''
-    response = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini"), "input": prompt},
-        timeout=150,
+반드시 아래 JSON 형식 하나만 출력하세요.
+{{
+  "title": "제목",
+  "meta_description": "메타 설명",
+  "body_html": "<h2>...</h2>",
+  "tags": ["태그1", "태그2"]
+}}
+"""
+    response = openai_client().responses.create(
+        model=OPENAI_MODEL,
+        input=prompt
     )
-    if not response.ok:
-        try:
-            message = response.json().get("error", {}).get("message", response.text)
-        except Exception:
-            message = response.text
-        raise RuntimeError(f"OpenAI 오류: {message[:300]}")
-    data = clean_json(extract_output_text(response.json()))
-    for field in ("title", "content_html"):
-        if not data.get(field):
-            raise RuntimeError("AI가 필요한 글 내용을 모두 만들지 못했습니다. 다시 시도해 주세요.")
+    raw = strip_code_fence(response.output_text)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.S)
+        if not match:
+            raise RuntimeError("AI 응답을 JSON으로 읽지 못했습니다. 다시 생성해 주세요.")
+        data = json.loads(match.group(0))
     return data
 
 
+def plain_text_from_html(html):
+    text = re.sub(r"<[^>]+>", " ", html or "")
+    return re.sub(r"\s+", " ", text).strip()
 
-def generate_thumbnail_image(article, thumbnail_text, thumbnail_style):
-    key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다.")
-    model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
-    prompt = f"""한국 블로그 대표 이미지. 주제: {article['keyword']}. 글 제목: {article['title']}.
-분위기: {thumbnail_style}. 가로형 1200x630 비율에 잘 맞는 중심 구도.
-핵심 대상을 크고 선명하게 보여주고, 복잡한 콜라주나 로고, 워터마크는 넣지 마세요.
-이미지 안에 글자를 넣지 마세요. 사람을 넣는 경우 자연스럽고 일상적인 한국 생활 장면으로 표현하세요."""
-    response = requests.post(
-        "https://api.openai.com/v1/images/generations",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": model, "prompt": prompt, "size": "1536x1024", "quality": "medium", "output_format": "jpeg"},
-        timeout=240,
+
+def analyze_seo(article):
+    html = article.body_html or ""
+    text = plain_text_from_html(html)
+    keyword = (article.keyword or "").strip()
+    title = article.title or ""
+    meta = article.meta_description or ""
+
+    checks = []
+    score = 0
+
+    def add(name, passed, points, advice):
+        nonlocal score
+        if passed:
+            score += points
+        checks.append({
+            "name": name,
+            "passed": passed,
+            "points": points,
+            "advice": advice
+        })
+
+    add("제목에 핵심 키워드", keyword.lower() in title.lower(), 20,
+        "제목에 핵심 키워드를 자연스럽게 넣으세요.")
+    add("제목 길이", 15 <= len(title) <= 45, 10,
+        "제목은 약 15~45자로 다듬어 보세요.")
+    add("메타 설명 길이", 70 <= len(meta) <= 160, 15,
+        "메타 설명은 약 70~160자로 작성하세요.")
+    add("H2 소제목", len(re.findall(r"<h2\b", html, re.I)) >= 3, 15,
+        "H2 소제목을 3개 이상 구성하세요.")
+    add("FAQ 포함", "FAQ" in text.upper() or "자주 묻" in text, 10,
+        "FAQ 또는 자주 묻는 질문을 추가하세요.")
+    add("본문 분량", len(text) >= 1200, 15,
+        "본문을 1,200자 이상으로 보강하세요.")
+    add("목록 활용", bool(re.search(r"<(ul|ol)\b", html, re.I)), 5,
+        "핵심 내용을 목록으로 정리하세요.")
+    add("키워드 자연 반복", 2 <= text.lower().count(keyword.lower()) <= 15 if keyword else False, 10,
+        "핵심 키워드를 본문에 2~15회 정도 자연스럽게 사용하세요.")
+
+    return min(score, 100), {"checks": checks, "text_length": len(text)}
+
+
+def image_prompt(article, style, thumbnail_text):
+    body_summary = plain_text_from_html(article.body_html)[:700]
+    return f"""
+Create a polished horizontal Korean blog hero image.
+Topic: {article.keyword}
+Article summary: {body_summary}
+Visual style: {style}
+Composition: 3:2 landscape, clear central subject, generous clean space for a headline overlay.
+Mood: trustworthy, warm, modern, family-friendly.
+Do not include logos, watermarks, brand marks, prices, statistics, or tiny unreadable text.
+Do not render the Korean headline inside the image. The web app overlays this text separately:
+{thumbnail_text}
+"""
+
+
+def generate_thumbnail(article, style, thumbnail_text):
+    result = openai_client().images.generate(
+        model=IMAGE_MODEL,
+        prompt=image_prompt(article, style, thumbnail_text),
+        size="1536x1024",
+        quality="medium"
     )
-    if not response.ok:
-        try:
-            message = response.json().get("error", {}).get("message", response.text)
-        except Exception:
-            message = response.text
-        raise RuntimeError(f"OpenAI 이미지 오류: {message[:300]}")
-    payload = response.json()
-    item = (payload.get("data") or [{}])[0]
-    image_bytes = None
-    if item.get("b64_json"):
-        image_bytes = base64.b64decode(item["b64_json"])
-    elif item.get("url"):
-        downloaded = requests.get(item["url"], timeout=120)
-        downloaded.raise_for_status()
-        image_bytes = downloaded.content
-    if not image_bytes:
-        raise RuntimeError("이미지 데이터를 받지 못했습니다.")
-    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"article_{article['id']}_{secrets.token_hex(5)}.jpg"
-    (MEDIA_DIR / filename).write_bytes(image_bytes)
-    return filename, prompt
-
-def google_config_ready():
-    return bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"))
+    image_b64 = result.data[0].b64_json
+    if not image_b64:
+        raise RuntimeError("이미지 데이터가 반환되지 않았습니다.")
+    filename = f"article_{article.id}_{int(datetime.utcnow().timestamp())}.png"
+    (MEDIA_DIR / filename).write_bytes(base64.b64decode(image_b64))
+    return filename
 
 
-def callback_uri():
-    return os.getenv("GOOGLE_REDIRECT_URI", "").strip() or url_for("oauth2callback", _external=True)
+def google_client_config():
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise RuntimeError("GOOGLE_CLIENT_ID 또는 GOOGLE_CLIENT_SECRET가 없습니다.")
+    return {
+        "web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [url_for("google_callback", _external=True)],
+        }
+    }
 
 
-def save_google_token(payload):
-    expires_in = int(payload.get("expires_in", 3600))
-    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=max(expires_in - 60, 60))).isoformat()
-    with db() as conn:
-        old = conn.execute("SELECT refresh_token FROM oauth_tokens WHERE provider='google'").fetchone()
-        refresh_token = payload.get("refresh_token") or (old["refresh_token"] if old else None)
-        conn.execute('''INSERT INTO oauth_tokens(provider,access_token,refresh_token,expires_at,token_type)
-                        VALUES('google',?,?,?,?)
-                        ON CONFLICT(provider) DO UPDATE SET access_token=excluded.access_token,
-                        refresh_token=excluded.refresh_token,expires_at=excluded.expires_at,token_type=excluded.token_type''',
-                     (payload["access_token"], refresh_token, expires_at, payload.get("token_type", "Bearer")))
-
-
-def get_google_token():
-    with db() as conn:
-        row = conn.execute("SELECT * FROM oauth_tokens WHERE provider='google'").fetchone()
-    if not row:
+def blogger_credentials():
+    token_json = get_setting("google_credentials")
+    if not token_json:
         return None
-    expires_at = datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else datetime.now(timezone.utc)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at > datetime.now(timezone.utc):
-        return row["access_token"]
-    if not row["refresh_token"]:
-        return None
-    response = requests.post(GOOGLE_TOKEN_URL, data={
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "refresh_token": row["refresh_token"],
-        "grant_type": "refresh_token",
-    }, timeout=30)
-    if not response.ok:
-        return None
-    payload = response.json()
-    payload["refresh_token"] = row["refresh_token"]
-    save_google_token(payload)
-    return payload["access_token"]
+    info = json.loads(token_json)
+    return Credentials.from_authorized_user_info(info, GOOGLE_SCOPES)
 
 
-def blogger_request(method, path, **kwargs):
-    token = get_google_token()
-    if not token:
-        raise RuntimeError("Google 연결이 만료되었습니다. 홈에서 다시 연결해 주세요.")
-    headers = kwargs.pop("headers", {})
-    headers["Authorization"] = f"Bearer {token}"
-    response = requests.request(method, f"https://www.googleapis.com/blogger/v3{path}", headers=headers, timeout=60, **kwargs)
-    if not response.ok:
-        try:
-            msg = response.json().get("error", {}).get("message", response.text)
-        except Exception:
-            msg = response.text
-        raise RuntimeError(f"Blogger 오류: {msg[:300]}")
-    return response.json() if response.content else {}
+def blogger_service():
+    creds = blogger_credentials()
+    if not creds:
+        raise RuntimeError("Google Blogger 연결이 필요합니다.")
+    return build("blogger", "v3", credentials=creds, cache_discovery=False)
 
 
-def list_blogs():
-    payload = blogger_request("GET", "/users/self/blogs")
-    return [{"id": b["id"], "name": b.get("name", "이름 없는 블로그"), "url": b.get("url", "")} for b in payload.get("items", [])]
+def get_blogs():
+    service = blogger_service()
+    data = service.blogs().listByUser(userId="self").execute()
+    return data.get("items", [])
+
+
+BASE_HTML = """
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title or 'MI Creator Hub' }}</title>
+<style>
+:root{--ink:#202124;--muted:#6b7280;--line:#e5e7eb;--brand:#6d5dfc;--soft:#f6f5ff;--ok:#0f9d58;--bad:#d93025}
+*{box-sizing:border-box}body{margin:0;background:#f7f8fc;color:var(--ink);font-family:Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
+.wrap{max-width:1040px;margin:34px auto;padding:0 18px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
+h1{margin:0 0 7px;font-size:30px}h2{margin:0 0 18px;font-size:22px}h3{margin:18px 0 8px}.lead,.small{color:var(--muted)}.small{font-size:14px}
+label{font-weight:700;display:block;margin:14px 0 7px}input,textarea,select{width:100%;border:1px solid #ccd0d5;border-radius:10px;padding:12px;font:inherit;background:#fff}textarea{min-height:150px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:10px;padding:12px 17px;background:var(--brand);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn.gray{background:#edf0f4;color:#202124}.btn.green{background:var(--ok)}.btn.red{background:var(--bad)}
+.flash{padding:13px 16px;border-radius:10px;background:#fff4d6;border:1px solid #f4cc63;margin-bottom:15px}.status{display:inline-block;padding:5px 9px;border-radius:99px;background:#edf7f0;color:var(--ok);font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.preview{border:1px solid var(--line);border-radius:12px;padding:20px;line-height:1.75}.thumb-wrap{position:relative;border-radius:15px;overflow:hidden;background:#ddd}.thumb{width:100%;display:block}.thumb-badge{position:absolute;left:5%;bottom:8%;max-width:88%;background:rgba(20,20,20,.78);color:#fff;padding:13px 18px;border-radius:10px;font-weight:800;font-size:clamp(18px,3vw,34px)}
+.score{font-size:46px;font-weight:900}.check{padding:10px 0;border-bottom:1px solid var(--line)}.pass{color:var(--ok);font-weight:800}.fail{color:var(--bad);font-weight:800}.tags{display:flex;gap:7px;flex-wrap:wrap}.tag{background:var(--soft);color:#5046b8;padding:7px 10px;border-radius:99px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.wrap{margin-top:18px}.card{padding:18px}table thead{display:none}table tr,table td{display:block}table tr{padding:12px 0;border-bottom:1px solid var(--line)}table td{border:0;padding:4px 0}}
+</style>
+</head>
+<body><main class="wrap">
+{% with messages=get_flashed_messages() %}{% if messages %}{% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}{% endif %}{% endwith %}
+{{ body|safe }}
+</main></body></html>
+"""
+
+
+def page(body_template, **context):
+    body = render_template_string(body_template, **context)
+    return render_template_string(BASE_HTML, body=Markup(body), **context)
 
 
 @app.get("/")
-def index():
-    with db() as conn:
-        articles = conn.execute("SELECT * FROM articles ORDER BY id DESC").fetchall()
-    token = get_google_token()
-    blogs = []
-    if token:
-        try:
-            blogs = list_blogs()
-        except Exception as exc:
-            flash(str(exc), "error")
-    return render_template_string(
-        PAGE,
-        articles=articles,
-        openai_ready=bool(os.getenv("OPENAI_API_KEY")),
-        google_ready=bool(token),
-        blogs=blogs,
-        selected_blog_id=get_setting("blogger_blog_id"),
-    )
+def home():
+    articles = Article.query.order_by(Article.created_at.desc()).all()
+    google_connected = bool(get_setting("google_credentials"))
+    return page("""
+<div class="card">
+<h1>MI Creator Hub <span class="status">V5</span></h1>
+<p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행까지 한 흐름으로 만들어요.</p>
+</div>
+
+<div class="grid">
+<section class="card">
+<h2>1. 새 글 만들기</h2>
+<form method="post" action="{{url_for('create_article')}}">
+<label>키워드</label><input name="keyword" required placeholder="예: 초등학생 여름방학 간식">
+<div class="grid">
+<div><label>브랜드 스타일</label><select name="brand_style"><option>육아·생활</option><option>보험·재무</option><option>애터미·생활용품</option><option>쿠팡·쇼핑</option><option>일반 정보</option></select></div>
+<div><label>글 유형</label><select name="article_type"><option>정보형</option><option>후기형</option><option>비교형</option><option>문제 해결형</option></select></div>
+<div><label>분량</label><select name="length"><option>약 1,500자</option><option selected>약 2,500자</option><option>약 3,500자</option></select></div>
+<div><label>독자</label><input name="audience" placeholder="예: 초등학생 자녀를 둔 부모"></div>
+</div>
+<label>내 경험·꼭 넣을 내용</label><textarea name="notes" placeholder="직접 사용한 느낌, 주의점, 가격 등. 모르는 사실은 비워두세요."></textarea>
+<div class="actions"><button class="btn" type="submit">AI 글 생성</button></div>
+</form>
+</section>
+
+<section class="card">
+<h2>2. 연결 상태</h2>
+<h3>OpenAI</h3><p class="small">글과 썸네일 생성용</p>
+<p><span class="status">{{'연결됨' if openai_ok else '환경변수 필요'}}</span></p>
+<h3>Google Blogger</h3><p class="small">내 블로그 목록 불러오기와 발행</p>
+{% if google_connected %}
+<p><span class="status">연결됨</span></p>
+<div class="actions"><a class="btn gray" href="{{url_for('google_disconnect')}}">연결 해제</a></div>
+{% else %}
+<div class="actions"><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a></div>
+{% endif %}
+</section>
+</div>
+
+<section class="card">
+<h2>저장된 글</h2>
+{% if articles %}
+<table><thead><tr><th>제목</th><th>SEO</th><th>상태</th><th></th></tr></thead><tbody>
+{% for a in articles %}<tr>
+<td><strong>{{a.title}}</strong><div class="small">{{a.keyword}} · {{a.created_at.strftime('%Y-%m-%d %H:%M')}}</div></td>
+<td>{{a.seo_score}}점</td><td>{{a.blogger_status or '저장됨'}}</td>
+<td><a class="btn gray" href="{{url_for('edit_article',article_id=a.id)}}">열기·수정</a></td>
+</tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="small">아직 글이 없습니다. 위에서 첫 글을 만들어보세요.</p>{% endif %}
+</section>
+""", articles=articles, google_connected=google_connected,
+       openai_ok=bool(os.getenv("OPENAI_API_KEY")), page_title="MI Creator Hub")
 
 
-@app.post("/generate")
-def generate():
+@app.post("/articles")
+def create_article():
     try:
-        keyword = request.form.get("keyword", "").strip()
-        if not keyword:
-            raise RuntimeError("키워드를 입력해 주세요.")
         data = generate_article(
-            keyword,
-            request.form.get("brand", "일반 정보"),
+            request.form["keyword"].strip(),
+            request.form.get("brand_style", "육아·생활"),
             request.form.get("article_type", "정보형"),
-            request.form.get("length", "2500"),
+            request.form.get("length", "약 2,500자"),
             request.form.get("audience", "").strip(),
-            request.form.get("experience", "").strip(),
+            request.form.get("notes", "").strip(),
         )
-        now = datetime.now().isoformat(timespec="seconds")
-        with db() as conn:
-            cur = conn.execute(
-                "INSERT INTO articles(keyword,title,meta_description,content_html,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-                (keyword, data["title"], data.get("meta_description", ""), data["content_html"], "saved", now, now),
-            )
-            article_id = cur.lastrowid
-        flash("AI 초안이 만들어졌어요. 내용을 확인하고 수정해 주세요.", "ok")
-        return redirect(url_for("edit", article_id=article_id))
-    except Exception as exc:
-        flash(f"생성 실패: {exc}", "error")
-        return redirect(url_for("index"))
-
-
-@app.get("/article/<int:article_id>")
-def edit(article_id):
-    with db() as conn:
-        article = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
-    if not article:
-        return "Not found", 404
-    return render_template_string(EDIT_PAGE, a=article)
-
-
-@app.post("/article/<int:article_id>/save")
-def save(article_id):
-    with db() as conn:
-        conn.execute(
-            "UPDATE articles SET title=?,meta_description=?,content_html=?,updated_at=? WHERE id=?",
-            (request.form.get("title", "").strip(), request.form.get("meta_description", "").strip(), request.form.get("content_html", ""), datetime.now().isoformat(timespec="seconds"), article_id),
+        tags = data.get("tags", [])
+        if isinstance(tags, list):
+            tags = ",".join(str(x).strip().lstrip("#") for x in tags if str(x).strip())
+        article = Article(
+            keyword=request.form["keyword"].strip(),
+            title=data.get("title", request.form["keyword"].strip()),
+            meta_description=data.get("meta_description", ""),
+            body_html=data.get("body_html", ""),
+            brand_style=request.form.get("brand_style", "육아·생활"),
+            article_type=request.form.get("article_type", "정보형"),
+            audience=request.form.get("audience", "").strip(),
+            notes=request.form.get("notes", "").strip(),
+            tags=tags,
         )
-    flash("수정 내용을 저장했어요.", "ok")
-    return redirect(url_for("edit", article_id=article_id))
+        db.session.add(article)
+        db.session.flush()
+        article.seo_score, report = analyze_seo(article)
+        article.seo_report = json.dumps(report, ensure_ascii=False)
+        db.session.commit()
+        flash("AI 초안이 만들어졌어요. 내용을 확인하고 수정해 주세요.")
+        return redirect(url_for("edit_article", article_id=article.id))
+    except Exception as e:
+        db.session.rollback()
+        flash(f"글 생성 실패: {e}")
+        return redirect(url_for("home"))
 
+
+@app.route("/articles/<int:article_id>", methods=["GET", "POST"])
+def edit_article(article_id):
+    article = Article.query.get_or_404(article_id)
+    if request.method == "POST":
+        article.title = request.form.get("title", "").strip()
+        article.meta_description = request.form.get("meta_description", "").strip()
+        article.body_html = request.form.get("body_html", "").strip()
+        article.tags = request.form.get("tags", "").strip()
+        article.seo_score, report = analyze_seo(article)
+        article.seo_report = json.dumps(report, ensure_ascii=False)
+        db.session.commit()
+        flash("수정 내용과 SEO 분석을 저장했습니다.")
+        return redirect(url_for("edit_article", article_id=article.id))
+
+    try:
+        seo_report = json.loads(article.seo_report or "{}")
+    except json.JSONDecodeError:
+        seo_report = {}
+    blogs = []
+    if get_setting("google_credentials"):
+        try:
+            blogs = get_blogs()
+        except Exception as e:
+            flash(f"Blogger 목록을 불러오지 못했습니다: {e}")
+    tags = [x.strip() for x in (article.tags or "").split(",") if x.strip()]
+    return page("""
+<div class="card">
+<a href="{{url_for('home')}}">← 홈으로</a>
+<h1 style="margin-top:14px">글 확인 및 수정</h1>
+<form method="post">
+<label>제목</label><input name="title" value="{{a.title}}" required>
+<label>메타 설명</label><textarea name="meta_description" style="min-height:90px">{{a.meta_description}}</textarea>
+<label>태그 <span class="small">쉼표로 구분</span></label><input name="tags" value="{{a.tags}}">
+<label>본문 HTML</label><textarea name="body_html" style="min-height:430px">{{a.body_html}}</textarea>
+<div class="actions"><button class="btn" type="submit">수정 내용 저장·SEO 재분석</button></div>
+</form>
+</div>
+
+<div class="grid">
+<section class="card">
+<h2>SEO 분석</h2><div class="score">{{a.seo_score}}<span class="small"> / 100</span></div>
+{% for c in seo_report.get('checks',[]) %}
+<div class="check"><span class="{{'pass' if c.passed else 'fail'}}">{{'통과' if c.passed else '보완'}}</span> · <strong>{{c.name}}</strong>
+{% if not c.passed %}<div class="small">{{c.advice}}</div>{% endif %}</div>
+{% endfor %}
+<h3>추천 태그</h3><div class="tags">{% for t in tags %}<span class="tag">#{{t}}</span>{% endfor %}</div>
+</section>
+
+<section class="card">
+<h2>AI 썸네일</h2>
+{% if a.thumbnail_path %}<div class="thumb-wrap"><img class="thumb" src="{{url_for('media',filename=a.thumbnail_path)}}" alt="{{a.title}}"><div class="thumb-badge">{{a.thumbnail_text or a.title}}</div></div>
+{% else %}<p class="small">아직 썸네일이 없습니다. 글 내용에 맞는 가로형 대표 이미지를 만들어요.</p>{% endif %}
+<form method="post" action="{{url_for('generate_thumbnail_route',article_id=a.id)}}">
+<label>썸네일 문구</label><input name="thumbnail_text" value="{{a.thumbnail_text or a.title}}" maxlength="45">
+<label>이미지 분위기</label><select name="thumbnail_style"><option>따뜻한 생활 사진</option><option>깔끔한 매거진</option><option>밝은 일러스트</option><option>전문적인 인포그래픽</option></select>
+<div class="actions"><button class="btn" type="submit">{{'썸네일 다시 만들기' if a.thumbnail_path else 'AI 썸네일 만들기'}}</button></div>
+</form>
+</section>
+</div>
+
+<section class="card"><h2>미리보기</h2><div class="preview"><h1>{{a.title}}</h1>{{a.body_html|safe}}</div></section>
+
+<section class="card">
+<h2>Blogger 보내기</h2><p class="small">처음에는 초안으로 보내 확인하는 것을 권장해요.</p>
+{% if blogs %}
+<form method="post" action="{{url_for('publish_blogger',article_id=a.id)}}">
+<label>블로그 선택</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}">{{b.name}}</option>{% endfor %}</select>
+<label>발행 방식</label><select name="mode"><option value="draft">초안으로 보내기</option><option value="publish">바로 공개 발행</option></select>
+<div class="actions"><button class="btn green" type="submit">Blogger로 보내기</button></div>
+</form>
+{% else %}<p>홈 화면에서 Google Blogger를 먼저 연결해 주세요.</p><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a>{% endif %}
+</section>
+""", a=article, seo_report=seo_report, tags=tags, blogs=blogs,
+       page_title=f"{article.title} | MI Creator Hub")
+
+
+@app.post("/articles/<int:article_id>/thumbnail")
+def generate_thumbnail_route(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        text = request.form.get("thumbnail_text", article.title).strip()[:45]
+        style = request.form.get("thumbnail_style", "따뜻한 생활 사진")
+        old_path = article.thumbnail_path
+        filename = generate_thumbnail(article, style, text)
+        article.thumbnail_path = filename
+        article.thumbnail_text = text
+        db.session.commit()
+        if old_path and old_path != filename:
+            old_file = MEDIA_DIR / old_path
+            if old_file.exists():
+                old_file.unlink()
+        flash("AI 썸네일이 완성됐어요.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"썸네일 생성 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
 
 
 @app.get("/media/<path:filename>")
@@ -371,124 +485,93 @@ def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
 
 
-@app.post("/article/<int:article_id>/thumbnail")
-def generate_thumbnail_route(article_id):
+@app.get("/google/connect")
+def google_connect():
     try:
-        with db() as conn:
-            article = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
-        if not article:
-            raise RuntimeError("글을 찾지 못했습니다.")
-        thumbnail_text = request.form.get("thumbnail_text", "").strip() or article["title"]
-        thumbnail_style = request.form.get("thumbnail_style", "깔끔한 매거진")
-        filename, prompt = generate_thumbnail_image(article, thumbnail_text, thumbnail_style)
-        with db() as conn:
-            conn.execute("UPDATE articles SET thumbnail_path=?,thumbnail_text=?,thumbnail_prompt=?,updated_at=? WHERE id=?",
-                         (filename, thumbnail_text, prompt, datetime.now().isoformat(timespec="seconds"), article_id))
-        flash("AI 썸네일이 만들어졌어요.", "ok")
-    except Exception as exc:
-        flash(f"썸네일 생성 실패: {exc}", "error")
-    return redirect(url_for("edit", article_id=article_id))
-
-@app.get("/google/login")
-def google_login():
-    if not google_config_ready():
-        flash("GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET을 먼저 설정해 주세요.", "error")
-        return redirect(url_for("index"))
-    state = secrets.token_urlsafe(24)
-    session["google_oauth_state"] = state
-    params = {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "redirect_uri": callback_uri(),
-        "response_type": "code",
-        "scope": BLOGGER_SCOPE,
-        "access_type": "offline",
-        "prompt": "consent",
-        "include_granted_scopes": "true",
-        "state": state,
-    }
-    return redirect(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
+        flow = Flow.from_client_config(
+            google_client_config(),
+            scopes=GOOGLE_SCOPES,
+            redirect_uri=url_for("google_callback", _external=True),
+        )
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+        session["oauth_state"] = state
+        return redirect(authorization_url)
+    except Exception as e:
+        flash(f"Google 연결 준비 실패: {e}")
+        return redirect(url_for("home"))
 
 
 @app.get("/oauth2callback")
-def oauth2callback():
-    if request.args.get("state") != session.pop("google_oauth_state", None):
-        flash("Google 연결 확인값이 맞지 않습니다. 다시 시도해 주세요.", "error")
-        return redirect(url_for("index"))
-    if request.args.get("error"):
-        flash(f"Google 연결이 취소되었어요: {request.args.get('error')}", "error")
-        return redirect(url_for("index"))
-    code = request.args.get("code")
-    response = requests.post(GOOGLE_TOKEN_URL, data={
-        "code": code,
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "redirect_uri": callback_uri(),
-        "grant_type": "authorization_code",
-    }, timeout=30)
-    if not response.ok:
-        flash(f"Google 토큰 발급 실패: {response.text[:300]}", "error")
-        return redirect(url_for("index"))
-    save_google_token(response.json())
-    flash("Google Blogger가 연결되었어요.", "ok")
-    return redirect(url_for("index"))
+def google_callback():
+    try:
+        flow = Flow.from_client_config(
+            google_client_config(),
+            scopes=GOOGLE_SCOPES,
+            state=session.get("oauth_state"),
+            redirect_uri=url_for("google_callback", _external=True),
+        )
+        flow.fetch_token(authorization_response=request.url)
+        creds = flow.credentials
+        set_setting("google_credentials", creds.to_json())
+        flash("Google Blogger 연결이 완료됐어요.")
+    except Exception as e:
+        flash(f"Google 연결 실패: {e}")
+    return redirect(url_for("home"))
 
 
 @app.get("/google/disconnect")
 def google_disconnect():
-    with db() as conn:
-        conn.execute("DELETE FROM oauth_tokens WHERE provider='google'")
-    flash("Google 연결을 해제했어요.", "ok")
-    return redirect(url_for("index"))
+    row = AppSetting.query.filter_by(setting_key="google_credentials").first()
+    if row:
+        db.session.delete(row)
+        db.session.commit()
+    flash("Google 연결을 해제했습니다.")
+    return redirect(url_for("home"))
 
 
-@app.post("/blogger/choose")
-def choose_blog():
-    blog_id = request.form.get("blog_id", "").strip()
-    if not blog_id:
-        flash("블로그를 선택해 주세요.", "error")
-    else:
-        set_setting("blogger_blog_id", blog_id)
-        flash("발행할 Blogger를 저장했어요.", "ok")
-    return redirect(url_for("index"))
-
-
-@app.post("/article/<int:article_id>/publish")
-def publish(article_id):
+@app.post("/articles/<int:article_id>/blogger")
+def publish_blogger(article_id):
+    article = Article.query.get_or_404(article_id)
     try:
-        blog_id = get_setting("blogger_blog_id")
-        if not blog_id:
-            raise RuntimeError("홈에서 발행할 Blogger를 먼저 선택해 주세요.")
-        with db() as conn:
-            article = conn.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
-        if not article:
-            raise RuntimeError("글을 찾지 못했습니다.")
-        is_draft = request.form.get("draft", "true").lower() == "true"
-        content = article["content_html"]
-        if article["thumbnail_path"]:
-            image_url = url_for("media", filename=article["thumbnail_path"], _external=True)
-            content = f'<p><img src="{html.escape(image_url)}" alt="{html.escape(article["title"])}" style="max-width:100%;height:auto"></p>' + content
-        if article["meta_description"]:
-            content = f"<p><em>{html.escape(article['meta_description'])}</em></p>" + content
-        result = blogger_request(
-            "POST",
-            f"/blogs/{blog_id}/posts/",
-            params={"isDraft": "true" if is_draft else "false"},
-            headers={"Content-Type": "application/json"},
-            json={"kind": "blogger#post", "title": article["title"], "content": content},
-        )
-        status = "blogger_draft" if is_draft else "published"
-        with db() as conn:
-            conn.execute(
-                "UPDATE articles SET status=?,blogger_post_id=?,blogger_url=?,updated_at=? WHERE id=?",
-                (status, result.get("id", ""), result.get("url", ""), datetime.now().isoformat(timespec="seconds"), article_id),
+        blog_id = request.form["blog_id"]
+        mode = request.form.get("mode", "draft")
+        content = article.body_html
+        if article.thumbnail_path:
+            public_image_url = url_for("media", filename=article.thumbnail_path, _external=True)
+            hero = (
+                f'<p><img src="{public_image_url}" alt="{article.title}" '
+                f'style="max-width:100%;height:auto"></p>'
             )
-        flash("Blogger 초안으로 보냈어요." if is_draft else "Blogger에 공개 발행했어요.", "ok")
-    except Exception as exc:
-        flash(f"발행 실패: {exc}", "error")
-    return redirect(url_for("edit", article_id=article_id))
+            content = hero + content
+
+        labels = [x.strip().lstrip("#") for x in (article.tags or "").split(",") if x.strip()]
+        body = {"title": article.title, "content": content, "labels": labels}
+        service = blogger_service()
+        result = service.posts().insert(
+            blogId=blog_id,
+            body=body,
+            isDraft=(mode == "draft"),
+            fetchImages=True,
+        ).execute()
+
+        article.blogger_post_id = result.get("id")
+        article.blogger_status = "Blogger 초안" if mode == "draft" else "Blogger 공개"
+        db.session.commit()
+        flash(f"{article.blogger_status}으로 보냈습니다.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Blogger 발행 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
 
 
-init_db()
+@app.get("/health")
+def health():
+    return {"status": "ok", "version": "5.0"}
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")), debug=False)
+    app.run(debug=True)
