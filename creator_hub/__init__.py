@@ -21,6 +21,10 @@ def create_app() -> Flask:
     if "planner_v93" not in app.blueprints:
         app.register_blueprint(planner_bp)
 
+    from .routes.calendar import calendar_bp
+    if "calendar_v94" not in app.blueprints:
+        app.register_blueprint(calendar_bp)
+
     with app.app_context():
         db.create_all()
 

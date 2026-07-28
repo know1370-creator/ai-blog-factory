@@ -1,21 +1,39 @@
-# MI Creator Hub V9.3
+# MI Creator Hub V9.4
 
-V9.3 adds a weekly AI content planner while preserving all existing V9.2 features.
+V9.4 adds a monthly content calendar, drag-and-drop date changes, workflow status management, scheduling preparation, and an operations dashboard.
 
-## New features
+## New in V9.4
 
-- Weekly planner screen: `/planner/`
-- Generates seven days of content ideas from one weekly theme
-- Mixes blog, Instagram comic, Reels/Shorts, Threads, and shopping content
-- Saves title, hook, content angle, CTA, date, brand, and status
-- Converts only selected ideas into full blog and social drafts
-- Keeps external publishing under user approval
-- Existing AI assistant: `/assistant/`
-- Existing finance dashboard: `/business/`
+- Monthly content calendar: `/calendar/`
+- Drag and drop a content card onto another date
+- Workflow statuses:
+  - 기획
+  - 초안
+  - 검토
+  - 예약
+  - 발행완료
+- Reservation date and time saved to the related article
+- Reservation requires an existing AI draft
+- External publishing still requires user review and approval
+- Operations dashboard: `/calendar/operations`
+- Calendar summary:
+  - today schedule count
+  - review queue
+  - reservations
+  - published items
+  - current month revenue
+
+## Existing screens
+
+- `/planner/`
+- `/assistant/`
+- `/business/`
+- `/calendar/`
 
 ## Deployment
 
-Upload the extracted files and folders to the existing GitHub repository without deleting existing files, Render environment variables, or the database.
+Extract the ZIP and upload its files and folders over the existing GitHub repository.
+Do not delete the database or Render environment variables.
 
 Render command:
 
@@ -23,11 +41,10 @@ Render command:
 gunicorn app:app
 ```
 
-Verify:
+## Verification
 
-- `/health` → version 9.3
-- `/v9/status` → modular-foundation-v9.3
-- `/planner/` → weekly content planner
-- `/assistant/` and `/business/` remain available
-
-The new `weekly_plan_item` database table is created automatically.
+- `/health` returns version `9.4`
+- `/v9/status` returns `modular-foundation-v9.4`
+- `/calendar/` opens the monthly calendar
+- `/calendar/operations` opens the operations dashboard
+- Existing V9.1 to V9.3 screens remain available
