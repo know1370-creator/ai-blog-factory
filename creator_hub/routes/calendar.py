@@ -1,4 +1,4 @@
-"""V9.4 content calendar, scheduling workflow, and operations dashboard."""
+"""V9.4.1 content calendar, scheduling workflow, and operations dashboard."""
 import calendar as calendar_module
 from datetime import date, datetime, time, timedelta
 
@@ -7,7 +7,7 @@ from markupsafe import Markup
 from sqlalchemy import func
 
 from ..legacy_app import BASE_HTML, Article, PublishLog, db
-from .business import FinanceEntry
+from .business import FinanceEntry, INCOME_CATEGORIES
 from .planner import WeeklyPlanItem
 
 
@@ -83,7 +83,7 @@ def dashboard():
     published_count = WeeklyPlanItem.query.filter_by(status="발행완료").count()
 
     month_revenue = db.session.query(func.coalesce(func.sum(FinanceEntry.amount), 0)).filter(
-        FinanceEntry.entry_type == "income",
+        FinanceEntry.category.in_(list(INCOME_CATEGORIES.keys())),
         FinanceEntry.entry_date >= month_start,
         FinanceEntry.entry_date <= month_end,
     ).scalar() or 0
@@ -116,7 +116,7 @@ def dashboard():
 <section class="card">
   <div class="actions" style="justify-content:space-between;margin-top:0">
     <div>
-      <h1>콘텐츠 캘린더 <span class="status">V9.4</span></h1>
+      <h1>콘텐츠 캘린더 <span class="status">V9.4.1</span></h1>
       <p class="lead">기획부터 초안, 검토, 예약, 발행완료까지 한 달 흐름을 한눈에 관리해요.</p>
     </div>
     <div class="actions" style="margin-top:0">
@@ -335,7 +335,7 @@ def operations():
 <section class="card">
   <div class="actions" style="justify-content:space-between;margin-top:0">
     <div>
-      <h1>운영 대시보드 <span class="status">V9.4</span></h1>
+      <h1>운영 대시보드 <span class="status">V9.4.1</span></h1>
       <p class="lead">작성, 예약, 발행 현황을 빠르게 확인하는 관리자 화면입니다.</p>
     </div>
     <a class="btn gray" href="{{url_for('calendar_v94.dashboard')}}">캘린더로</a>

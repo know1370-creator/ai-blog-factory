@@ -617,7 +617,7 @@ def home():
     progress_map = {a.id: pipeline_progress(a) for a in articles}
     return page("""
 <div class="card">
-<h1>MI Creator Hub <span class="status">V9.4</span></h1>
+<h1>MI Creator Hub <span class="status">V9.4.1</span></h1>
 <p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행과 수익화 링크까지 한 흐름으로 만들어요.</p>
 <div class="actions"><a class="btn" href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a><a class="btn gray" href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a><a class="btn gray" href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a><a class="btn gray" href="{{url_for('content_calendar')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('idea_lab')}}">AI 아이디어 연구소</a></div>
 <div class="stat-grid">
@@ -1366,7 +1366,7 @@ def content_calendar():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "9.4"}
+    return {"status": "ok", "version": "9.4.1"}
 
 
 if __name__ == "__main__":

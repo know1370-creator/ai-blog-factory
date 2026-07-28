@@ -1,50 +1,28 @@
-# MI Creator Hub V9.4
+# MI Creator Hub V9.4.1 Hotfix
 
-V9.4 adds a monthly content calendar, drag-and-drop date changes, workflow status management, scheduling preparation, and an operations dashboard.
+This patch fixes the `/calendar/` internal server error.
 
-## New in V9.4
+## Cause
 
-- Monthly content calendar: `/calendar/`
-- Drag and drop a content card onto another date
-- Workflow statuses:
-  - 기획
-  - 초안
-  - 검토
-  - 예약
-  - 발행완료
-- Reservation date and time saved to the related article
-- Reservation requires an existing AI draft
-- External publishing still requires user review and approval
-- Operations dashboard: `/calendar/operations`
-- Calendar summary:
-  - today schedule count
-  - review queue
-  - reservations
-  - published items
-  - current month revenue
+The calendar attempted to filter finance records using `FinanceEntry.entry_type`,
+but the V9.1 finance model stores income and cost types in the `category` column.
 
-## Existing screens
+## Fix
 
-- `/planner/`
-- `/assistant/`
-- `/business/`
-- `/calendar/`
+Monthly revenue now filters by the existing income categories:
+
+- adsense
+- coupang
+- atomy
+- other_income
 
 ## Deployment
 
-Extract the ZIP and upload its files and folders over the existing GitHub repository.
+Upload the extracted files over the existing GitHub repository.
 Do not delete the database or Render environment variables.
 
-Render command:
+Verify:
 
-```text
-gunicorn app:app
-```
-
-## Verification
-
-- `/health` returns version `9.4`
-- `/v9/status` returns `modular-foundation-v9.4`
-- `/calendar/` opens the monthly calendar
-- `/calendar/operations` opens the operations dashboard
-- Existing V9.1 to V9.3 screens remain available
+- `/health` returns version `9.4.1`
+- `/calendar/` opens normally
+- `/business/` remains available
