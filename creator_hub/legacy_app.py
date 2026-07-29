@@ -599,7 +599,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
       <div class="nav-menu">
         <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
         <a href="{{url_for('generator_v12.generate')}}">AI 프로젝트 생성기</a>
-        <a href="{{url_for('assistant_v92.index')}}">AI 콘텐츠 도우미</a>
+        <a href="{{url_for('assistant_v92.generate')}}">AI 콘텐츠 도우미</a>
         <a href="{{url_for('marketing_v14.ideas')}}">아이디어 뱅크</a>
       </div>
     </details>
