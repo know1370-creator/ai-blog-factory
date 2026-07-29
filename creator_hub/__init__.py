@@ -49,6 +49,10 @@ def create_app() -> Flask:
     if "generator_v12" not in app.blueprints:
         app.register_blueprint(generator_bp)
 
+    from .routes.pipeline import pipeline_bp
+    if "pipeline_v13" not in app.blueprints:
+        app.register_blueprint(pipeline_bp)
+
     with app.app_context():
         db.create_all()
 

@@ -13,6 +13,7 @@ from .analytics import ContentMetric
 from .social import SocialInteraction
 from .manager import HookPack, ReelPlan, ABExperiment
 from .library import ContentLibraryItem
+from .pipeline import PipelineMeta
 
 
 diagnostics_bp = Blueprint("diagnostics_v95", __name__, url_prefix="/diagnostics")
@@ -47,6 +48,7 @@ def dashboard():
         ("릴스 기획 테이블", ReelPlan),
         ("A/B 실험 테이블", ABExperiment),
         ("콘텐츠 라이브러리 테이블", ContentLibraryItem),
+        ("파이프라인 설정 테이블", PipelineMeta),
     ]
     for label, model in model_checks:
         try:
