@@ -1,84 +1,101 @@
-# MI Creator Hub V14.0
+# MI Creator Hub V15.0
 
-V14.0 adds a practical marketing operations layer to V13.0.
+V15.0 adds a multi-format Content Factory on top of the V14 marketing center.
 
 ## New routes
 
-- `/marketing/` AI Marketing Center
-- `/marketing/ideas` Content Idea Bank
-- `/marketing/shooting` Shooting Checklist
-- `/marketing/monthly-report` Monthly Operations Report
+- `/factory/` Content Factory dashboard
+- `/factory/create` New content package
+- `/factory/templates` Reusable brand templates
+- `/factory/series` Series memory
+- `/factory/projects/<id>` Package progress and outputs
+- `/factory/outputs/<id>/edit` Output editor
 
-## Marketing Center
+## Content Factory
 
-The dashboard compares real, manually stored performance data by:
+A single source project can create linked working drafts for:
 
-- date range
+- Blog
+- Reels and Shorts
+- Instagram comic
+- Threads
+- Instagram caption
+- Newsletter
+
+Each package stores:
+
+- source text
 - brand
-- channel
-- content
-- views
-- engagement rate
-- save rate
-- click rate
-- linked revenue
+- category
+- series name
+- episode number
+- target formats
+- character and world notes
+- continuity notes
+- next-episode hints
 
-Recommendations are generated deterministically from stored metrics. The system does not invent views, sales, revenue, reach, or growth.
+## Series memory
 
-## Idea Bank
+- Automatic next episode numbering
+- Series-level continuity notes
+- Character and world memory
+- Latest next-episode hint
+- Series overview
 
-- Save an idea, hook, angle, tags, brand, format, category, and priority
-- Move ideas through statuses
-- Convert an idea into a content-library project
-- No automatic content generation or publishing
+## Templates
 
-## Shooting Checklist
+Reusable templates store:
 
-Each active content-library project can track:
+- brand
+- tone
+- audience
+- hook formula
+- content structure
+- CTA formula
+- safety notes
+- favorite status
 
-- location
-- props
-- cast and outfit
+## Progress tracking
+
+Each package tracks:
+
+- planning
 - script
 - filming
 - editing
-- thumbnail
-- caption and CTA
+- review
+- publishing
 
-## Monthly Report
+The completion percentage is calculated from these six saved stages.
 
-The monthly report summarizes:
+## Library workflow
 
-- new content
-- completed content
-- completion rate
-- active projects
-- new ideas
-- stored performance totals
-- brand-level performance
-
-## Database
-
-V14 adds:
-
-- `marketing_idea`
-- `shooting_checklist`
-
-Existing tables are not altered.
+Each factory output can be saved to the existing Content Library in `검토` status.
+No content is automatically published.
 
 ## Safety
 
-- Only stored performance data is analyzed.
-- No automatic posting occurs.
-- Affiliate products, links, prices, and discounts are never invented.
-- External actions remain approval-only.
+- Drafts do not invent product names, prices, discounts, affiliate links, experiences, statistics, income, or performance.
+- User-entered source facts remain the authority.
+- Insurance and product wording still require manual review.
+- External publishing remains manual and approval-only.
+
+## Database
+
+V15 adds:
+
+- `content_factory_project`
+- `content_factory_output`
+- `content_factory_template`
+
+Existing tables are not altered.
 
 ## Verification
 
-- `/health` returns `14.0`
-- `/v9/status` returns `modular-foundation-v14.0`
-- `/marketing/`
-- `/marketing/ideas`
-- `/marketing/shooting`
-- `/marketing/monthly-report`
+- `/health` returns `15.0`
+- `/v9/status` returns `modular-foundation-v15.0`
+- `/factory/`
+- `/factory/create`
+- `/factory/templates`
+- `/factory/series`
 - `/diagnostics/`

@@ -57,6 +57,10 @@ def create_app() -> Flask:
     if "marketing_v14" not in app.blueprints:
         app.register_blueprint(marketing_bp)
 
+    from .routes.factory import factory_bp
+    if "factory_v15" not in app.blueprints:
+        app.register_blueprint(factory_bp)
+
     with app.app_context():
         db.create_all()
 

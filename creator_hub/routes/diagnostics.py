@@ -15,6 +15,7 @@ from .manager import HookPack, ReelPlan, ABExperiment
 from .library import ContentLibraryItem
 from .pipeline import PipelineMeta
 from .marketing import MarketingIdea, ShootingChecklist
+from .factory import ContentFactoryProject, ContentFactoryOutput, ContentFactoryTemplate
 
 
 diagnostics_bp = Blueprint("diagnostics_v95", __name__, url_prefix="/diagnostics")
@@ -52,6 +53,9 @@ def dashboard():
         ("파이프라인 설정 테이블", PipelineMeta),
         ("마케팅 아이디어 테이블", MarketingIdea),
         ("촬영 체크리스트 테이블", ShootingChecklist),
+        ("콘텐츠 팩토리 프로젝트 테이블", ContentFactoryProject),
+        ("콘텐츠 팩토리 결과물 테이블", ContentFactoryOutput),
+        ("콘텐츠 팩토리 템플릿 테이블", ContentFactoryTemplate),
     ]
     for label, model in model_checks:
         try:
@@ -107,7 +111,7 @@ def dashboard():
     </tbody>
   </table>
   <p class="notice">이 화면은 OpenAI 생성 테스트를 실행하지 않으므로 API 비용이 발생하지 않습니다.</p>
-<p class="small">V14 확인 경로: /marketing/ · /generator/ · 생성 결과는 자동 게시되지 않고 콘텐츠 라이브러리에 저장됩니다.</p>
+<p class="small">V15 확인 경로: /factory/ · /marketing/ · /generator/ · 생성 결과는 자동 게시되지 않고 콘텐츠 라이브러리에 저장됩니다.</p>
 </section>
 """,
         checks=checks,
