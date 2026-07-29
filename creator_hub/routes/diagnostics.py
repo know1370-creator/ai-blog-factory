@@ -14,6 +14,7 @@ from .social import SocialInteraction
 from .manager import HookPack, ReelPlan, ABExperiment
 from .library import ContentLibraryItem
 from .pipeline import PipelineMeta
+from .marketing import MarketingIdea, ShootingChecklist
 
 
 diagnostics_bp = Blueprint("diagnostics_v95", __name__, url_prefix="/diagnostics")
@@ -49,6 +50,8 @@ def dashboard():
         ("A/B 실험 테이블", ABExperiment),
         ("콘텐츠 라이브러리 테이블", ContentLibraryItem),
         ("파이프라인 설정 테이블", PipelineMeta),
+        ("마케팅 아이디어 테이블", MarketingIdea),
+        ("촬영 체크리스트 테이블", ShootingChecklist),
     ]
     for label, model in model_checks:
         try:
@@ -104,7 +107,7 @@ def dashboard():
     </tbody>
   </table>
   <p class="notice">이 화면은 OpenAI 생성 테스트를 실행하지 않으므로 API 비용이 발생하지 않습니다.</p>
-<p class="small">V12 확인 경로: /generator/ · 생성 결과는 자동 게시되지 않고 콘텐츠 라이브러리에 저장됩니다.</p>
+<p class="small">V14 확인 경로: /marketing/ · /generator/ · 생성 결과는 자동 게시되지 않고 콘텐츠 라이브러리에 저장됩니다.</p>
 </section>
 """,
         checks=checks,
