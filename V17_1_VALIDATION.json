@@ -1,0 +1,22 @@
+{
+  "version": "17.1",
+  "python_files_compiled": 28,
+  "checks": {
+    "root redirects to easy home": true,
+    "single hamburger menu": true,
+    "old many-button navigation removed": true,
+    "content factory retained": true,
+    "marketing retained": true,
+    "pipeline retained": true,
+    "generator retained": true,
+    "library retained": true,
+    "manager retained": true,
+    "social retained": true,
+    "analytics retained": true,
+    "diagnostics retained": true,
+    "calendar retained": true,
+    "planner retained": true,
+    "assistant retained": true,
+    "business retained": true
+  }
+}

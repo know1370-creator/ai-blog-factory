@@ -10,4 +10,4 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'creator.db'}")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
     IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
-    APP_VERSION = "17.0"
+    APP_VERSION = "17.1"

@@ -573,17 +573,27 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
 .check-item{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft)}.money-box{border:1px solid #f0d9a7;background:#fffaf0;border-radius:14px;padding:18px}.notice{font-size:13px;color:var(--muted);background:#f7f8fc;border-radius:9px;padding:10px}.toggle{display:flex;align-items:center;gap:9px;margin-top:14px}.toggle input{width:auto}.score{font-size:46px;font-weight:900}.check{padding:10px 0;border-bottom:1px solid var(--line)}.pass{color:var(--ok);font-weight:800}.fail{color:var(--bad);font-weight:800}.tags{display:flex;gap:7px;flex-wrap:wrap}.tag{background:var(--soft);color:#5046b8;padding:7px 10px;border-radius:99px}
 @media(max-width:700px){.grid,.stat-grid,.pipeline-grid,.checklist{grid-template-columns:1fr}.wrap{margin-top:18px}.card{padding:18px}table thead{display:none}table tr,table td{display:block}table tr{padding:12px 0;border-bottom:1px solid var(--line)}table td{border:0;padding:4px 0}}
 
-.nav-shell{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid #e5e7eb}
-.nav-inner{max-width:1180px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.nav-brand{font-weight:900;text-decoration:none;color:#111827;margin-right:auto}
-.nav-home{background:#4f46e5;color:#fff!important;padding:9px 14px;border-radius:11px;text-decoration:none;font-weight:800}
-.nav-group{position:relative}
-.nav-group summary{list-style:none;cursor:pointer;padding:9px 12px;border-radius:11px;background:#f3f4f6;font-weight:700}
-.nav-group summary::-webkit-details-marker{display:none}
-.nav-menu{position:absolute;top:44px;right:0;min-width:220px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:8px;box-shadow:0 16px 38px rgba(15,23,42,.12)}
-.nav-menu a{display:block;padding:9px 10px;border-radius:9px;text-decoration:none;color:#111827}
-.nav-menu a:hover{background:#f3f4f6}
-@media(max-width:760px){.nav-brand{width:100%;margin-bottom:2px}.nav-group{flex:1}.nav-group summary{text-align:center}.nav-menu{left:0;right:auto}}
+.nav-shell{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:1px solid #e5e7eb}
+.nav-inner{max-width:1180px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px}
+.nav-brand{font-weight:900;text-decoration:none;color:#111827;margin-right:auto;font-size:18px}
+.nav-home{background:#eef2ff;color:#4338ca!important;padding:9px 13px;border-radius:11px;text-decoration:none;font-weight:800}
+.all-menu{position:relative}
+.all-menu summary{list-style:none;cursor:pointer;padding:9px 13px;border-radius:11px;background:#4f46e5;color:#fff;font-weight:800;user-select:none}
+.all-menu summary::-webkit-details-marker{display:none}
+.all-menu[open] summary{background:#3730a3}
+.all-menu-panel{position:absolute;top:47px;right:0;width:min(430px,calc(100vw - 28px));max-height:calc(100vh - 80px);overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:15px;box-shadow:0 20px 50px rgba(15,23,42,.18)}
+.menu-section{padding:5px 0 12px}
+.menu-section+.menu-section{border-top:1px solid #eef0f3;padding-top:14px}
+.menu-title{font-size:13px;font-weight:900;color:#6366f1;margin:0 0 7px;padding:0 5px}
+.menu-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.menu-links a{display:block;padding:11px 10px;border-radius:11px;text-decoration:none;color:#111827;background:#f6f7f9;font-weight:700;font-size:14px}
+.menu-links a:hover{background:#eef2ff;color:#4338ca}
+@media(max-width:600px){
+  .nav-brand{font-size:16px}
+  .nav-home{display:none}
+  .all-menu-panel{position:fixed;top:61px;left:14px;right:14px;width:auto}
+  .menu-links{grid-template-columns:1fr}
+}
 
 </style>
 </head>
@@ -594,43 +604,56 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
     <a class="nav-brand" href="{{url_for('home_v16.dashboard')}}">MI Creator Hub</a>
     <a class="nav-home" href="{{url_for('home_v16.dashboard')}}">홈</a>
 
-    <details class="nav-group">
-      <summary>콘텐츠 제작</summary>
-      <div class="nav-menu">
-        <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
-        <a href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 생성기</a>
-        <a href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a>
-        <a href="{{url_for('marketing_v14.ideas')}}">아이디어 뱅크</a>
-        <a href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a>
-      </div>
-    </details>
+    <details class="all-menu">
+      <summary>☰ 전체 메뉴</summary>
+      <div class="all-menu-panel">
+        <div class="menu-section">
+          <div class="menu-title">콘텐츠 제작</div>
+          <div class="menu-links">
+            <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
+            <a href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a>
+            <a href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a>
+            <a href="{{url_for('marketing_v14.ideas')}}">AI 아이디어 연구소</a>
+            <a href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a>
+            <a href="{{url_for('manager_v10.dashboard')}}">AI 콘텐츠 매니저</a>
+          </div>
+        </div>
 
-    <details class="nav-group">
-      <summary>운영 관리</summary>
-      <div class="nav-menu">
-        <a href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a>
-        <a href="{{url_for('marketing_v14.shooting')}}">촬영 체크리스트</a>
-        <a href="{{url_for('planner_v93.dashboard')}}">주간 플래너</a>
-        <a href="{{url_for('calendar_v94.dashboard')}}">월간 캘린더</a>
-      </div>
-    </details>
+        <div class="menu-section">
+          <div class="menu-title">운영 관리</div>
+          <div class="menu-links">
+            <a href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a>
+            <a href="{{url_for('marketing_v14.shooting')}}">촬영 체크리스트</a>
+            <a href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a>
+            <a href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a>
+          </div>
+        </div>
 
-    <details class="nav-group">
-      <summary>마케팅·사업</summary>
-      <div class="nav-menu">
-        <a href="{{url_for('marketing_v14.dashboard')}}">마케팅 센터</a>
-        <a href="{{url_for('analytics_v95.dashboard')}}">성과 입력</a>
-        <a href="{{url_for('marketing_v14.monthly_report')}}">월간 리포트</a>
-        <a href="{{url_for('social_v96.dashboard')}}">댓글·DM 응대</a>
-        <a href="{{url_for('business_v91.dashboard')}}">수익·비용</a>
-      </div>
-    </details>
+        <div class="menu-section">
+          <div class="menu-title">마케팅·소통</div>
+          <div class="menu-links">
+            <a href="{{url_for('marketing_v14.dashboard')}}">AI 마케팅 센터</a>
+            <a href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a>
+            <a href="{{url_for('marketing_v14.monthly_report')}}">월간 리포트</a>
+            <a href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a>
+          </div>
+        </div>
 
-    <details class="nav-group">
-      <summary>도구</summary>
-      <div class="nav-menu">
-        <a href="{{url_for('manager_v10.dashboard')}}">훅·릴스 실험</a>
-        <a href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a>
+        <div class="menu-section">
+          <div class="menu-title">사업·시스템</div>
+          <div class="menu-links">
+            <a href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a>
+            <a href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-title">기존 도구</div>
+          <div class="menu-links">
+            <a href="{{url_for('content_calendar')}}">기존 콘텐츠 캘린더</a>
+            <a href="{{url_for('idea_lab')}}">기존 AI 아이디어 연구소</a>
+          </div>
+        </div>
       </div>
     </details>
   </div>
@@ -666,6 +689,8 @@ def page(body_template, **context):
 
 @app.get("/")
 def home():
+    return redirect(url_for("home_v16.dashboard"))
+
     articles = Article.query.order_by(Article.created_at.desc()).all()
     google_connected = bool(get_setting("google_credentials"))
     total_count = Article.query.count()
@@ -678,7 +703,7 @@ def home():
     progress_map = {a.id: pipeline_progress(a) for a in articles}
     return page("""
 <div class="card">
-<h1>MI Creator Hub <span class="status">V17.0</span></h1>
+<h1>MI Creator Hub <span class="status">V17.1</span></h1>
 <p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행과 수익화 링크까지 한 흐름으로 만들어요.</p>
 <div class="actions"><a class="btn" href="{{url_for('home_v16.dashboard')}}">쉬운 홈으로 가기</a><a class="btn gray" href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a><a class="btn gray" href="{{url_for('marketing_v14.dashboard')}}">AI 마케팅 센터</a><a class="btn gray" href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a><a class="btn gray" href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a><a class="btn gray" href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a><a class="btn gray" href="{{url_for('manager_v10.dashboard')}}">AI 콘텐츠 매니저</a><a class="btn gray" href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a><a class="btn gray" href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a><a class="btn gray" href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a><a class="btn gray" href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a><a class="btn gray" href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a><a class="btn gray" href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a><a class="btn gray" href="{{url_for('content_calendar')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('idea_lab')}}">AI 아이디어 연구소</a></div>
 <div class="stat-grid">

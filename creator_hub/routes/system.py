@@ -8,8 +8,8 @@ system_bp = Blueprint("system_v9", __name__)
 def v9_status():
     return jsonify({
         "status": "ok",
-        "version": "17.0",
-        "architecture": "modular-foundation-v17.0",
+        "version": "17.1",
+        "architecture": "modular-foundation-v17.1",
         "runtime": "compatibility-first",
         "modules": [
             "config",
