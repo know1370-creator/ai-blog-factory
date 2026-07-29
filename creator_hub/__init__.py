@@ -65,6 +65,36 @@ def create_app() -> Flask:
     if "home_v16" not in app.blueprints:
         app.register_blueprint(home_bp)
 
+
+    required_navigation_endpoints = [
+        "home_v16.dashboard",
+        "factory_v15.dashboard",
+        "generator_v12.dashboard",
+        "assistant_v92.dashboard",
+        "marketing_v14.ideas",
+        "library_v11.dashboard",
+        "pipeline_v13.board",
+        "marketing_v14.shooting",
+        "planner_v93.dashboard",
+        "calendar_v94.dashboard",
+        "marketing_v14.dashboard",
+        "analytics_v95.dashboard",
+        "marketing_v14.monthly_report",
+        "social_v96.dashboard",
+        "business_v91.dashboard",
+        "manager_v10.dashboard",
+        "diagnostics_v95.dashboard",
+    ]
+    missing_endpoints = [
+        endpoint for endpoint in required_navigation_endpoints
+        if endpoint not in app.view_functions
+    ]
+    if missing_endpoints:
+        raise RuntimeError(
+            "V17 navigation endpoint validation failed: "
+            + ", ".join(missing_endpoints)
+        )
+
     with app.app_context():
         db.create_all()
 

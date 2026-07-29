@@ -1,67 +1,48 @@
-# MI Creator Hub V16.0
+# MI Creator Hub V17.0
 
-V16.0 focuses on usability. It adds one clear home screen and grouped navigation so users do not need to remember every module.
+V17.0 is the navigation-stability and usability release.
 
-## New easy home
+## Main improvements
 
+### Easy command center
 - `/home/`
+- Four-step workflow: idea → create → manage → measure
+- “What should I do today?” priority list
+- Seven-day deadline summary
+- Four clear quick actions
 
-The home screen groups the app into four common actions:
+### Grouped global navigation
+- Content creation
+- Operations
+- Marketing and business
+- Tools
 
-1. Create content
-2. Track progress
-3. Review performance
-4. Find completed content
+### BuildError prevention
+The application validates every navigation endpoint during startup.
+If a menu endpoint is missing, startup fails with a clear endpoint list instead of showing users a broken page.
 
-It also shows:
+### Corrected endpoints
+All V17 navigation links use verified route function names:
+- `generator_v12.dashboard`
+- `assistant_v92.dashboard`
+- `planner_v93.dashboard`
+- `calendar_v94.dashboard`
+- `library_v11.dashboard`
+- `analytics_v95.dashboard`
+- `social_v96.dashboard`
+- `business_v91.dashboard`
+- `manager_v10.dashboard`
+- `diagnostics_v95.dashboard`
 
-- active content
-- active factory packages
-- waiting ideas
-- seven-day deadlines
-- a first-use workflow guide
-- a full feature directory
-
-## Navigation improvements
-
-A global navigation bar is available on every screen:
-
-- Home
-- Create
-- Manage
-- Performance and business
-- Other
-
-The Content Factory and Marketing Center now each include a visible Home button.
-
-## Existing major routes
-
-- `/factory/` Content Factory
-- `/marketing/` Marketing Center
-- `/pipeline/` Content Pipeline
-- `/library/` Content Library
-- `/home/` Simplified Home
-
-## Small fix
-
-The Series Memory “next episode” button now carries the series name into the new-project screen.
-
-## Safety
-
-- No automatic external publishing
-- No invented product names, prices, links, income, statistics, or performance
-- Stored data remains the source of truth
-- External communication remains approval-only
-
-## Verification
-
-- `/health` returns `16.0`
-- `/v9/status` returns `modular-foundation-v16.0`
+## Main routes
 - `/home/`
 - `/factory/`
 - `/marketing/`
+- `/pipeline/`
+- `/library/`
 - `/diagnostics/`
 
-
-## V16.0.1 hotfix
-- Fixed global navigation link from `generator_v12.index` to `generator_v12.generate`.
+## Safety
+- No automatic external publishing
+- External replies remain approval-only
+- No invented products, prices, links, income, statistics, or performance

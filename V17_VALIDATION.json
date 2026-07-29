@@ -1,0 +1,18 @@
+{
+  "version": "17.0",
+  "python_files_compiled": 28,
+  "available_endpoints_found": 84,
+  "url_for_references_checked": 77,
+  "missing_url_for_endpoints": [],
+  "required_navigation_endpoints_checked": 17,
+  "feature_checks": {
+    "V17 home": true,
+    "four-step workflow": true,
+    "today priority": true,
+    "grouped navigation": true,
+    "startup validation": true,
+    "version config": true,
+    "version status": true
+  },
+  "note": "Flask 런타임 패키지는 이 작업 환경에 없어 정적 라우트 검증으로 수행했습니다."
+}
