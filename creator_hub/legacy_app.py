@@ -552,7 +552,7 @@ BASE_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ page_title or 'MI Creator Hub' }}</title>
+<title>{{ page_title or 'MI Creator OS' }}</title>
 <style>
 :root{--ink:#202124;--muted:#6b7280;--line:#e5e7eb;--brand:#6d5dfc;--soft:#f6f5ff;--ok:#0f9d58;--bad:#d93025;--warn:#b26a00}
 *{box-sizing:border-box}body{margin:0;background:#f7f8fc;color:var(--ink);font-family:Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
@@ -601,7 +601,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
 
 <div class="nav-shell">
   <div class="nav-inner">
-    <a class="nav-brand" href="{{url_for('home_v16.dashboard')}}">MI Creator Hub</a>
+    <a class="nav-brand" href="{{url_for('home_v16.dashboard')}}">MI Creator OS</a>
     <a class="nav-home" href="{{url_for('home_v16.dashboard')}}">홈</a>
 
     <details class="all-menu">
