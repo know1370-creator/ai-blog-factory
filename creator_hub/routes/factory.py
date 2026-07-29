@@ -274,6 +274,7 @@ def dashboard():
       <p class="lead">하나의 원본을 여러 콘텐츠 형식으로 묶어 제작하고 진행률까지 관리합니다.</p>
     </div>
     <div class="actions" style="margin-top:0">
+      <a class="btn gray" href="{{url_for('home_v16.dashboard')}}">홈</a>
       <a class="btn" href="{{url_for('factory_v15.create_project')}}">새 콘텐츠 패키지</a>
       <a class="btn gray" href="{{url_for('factory_v15.templates')}}">템플릿 관리</a>
       <a class="btn gray" href="{{url_for('factory_v15.series')}}">시리즈 메모리</a>
@@ -350,6 +351,7 @@ def dashboard():
 @factory_bp.route("/create", methods=["GET", "POST"])
 def create_project():
     template_id = request.args.get("template_id", type=int)
+    requested_series_name = request.args.get("series_name", "").strip()
     template = db.session.get(ContentFactoryTemplate, template_id) if template_id else None
     source_item_id = request.args.get("source_item_id", type=int)
     source_item = db.session.get(ContentLibraryItem, source_item_id) if source_item_id else None
@@ -419,7 +421,7 @@ def create_project():
         "title": source_item.title if source_item else "",
         "brand": source_item.brand if source_item else (template.brand if template else "말썽쟁이 딸랑구"),
         "category": source_item.category if source_item else "일반",
-        "series_name": source_item.series_name if source_item else "",
+        "series_name": source_item.series_name if source_item else requested_series_name,
         "episode_number": source_item.episode_number if source_item else "",
         "source_text": (
             (source_item.blog_draft or source_item.summary or source_item.reel_script or "")

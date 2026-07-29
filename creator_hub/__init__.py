@@ -61,6 +61,10 @@ def create_app() -> Flask:
     if "factory_v15" not in app.blueprints:
         app.register_blueprint(factory_bp)
 
+    from .routes.home import home_bp
+    if "home_v16" not in app.blueprints:
+        app.register_blueprint(home_bp)
+
     with app.app_context():
         db.create_all()
 

@@ -1,101 +1,63 @@
-# MI Creator Hub V15.0
+# MI Creator Hub V16.0
 
-V15.0 adds a multi-format Content Factory on top of the V14 marketing center.
+V16.0 focuses on usability. It adds one clear home screen and grouped navigation so users do not need to remember every module.
 
-## New routes
+## New easy home
 
-- `/factory/` Content Factory dashboard
-- `/factory/create` New content package
-- `/factory/templates` Reusable brand templates
-- `/factory/series` Series memory
-- `/factory/projects/<id>` Package progress and outputs
-- `/factory/outputs/<id>/edit` Output editor
+- `/home/`
 
-## Content Factory
+The home screen groups the app into four common actions:
 
-A single source project can create linked working drafts for:
+1. Create content
+2. Track progress
+3. Review performance
+4. Find completed content
 
-- Blog
-- Reels and Shorts
-- Instagram comic
-- Threads
-- Instagram caption
-- Newsletter
+It also shows:
 
-Each package stores:
+- active content
+- active factory packages
+- waiting ideas
+- seven-day deadlines
+- a first-use workflow guide
+- a full feature directory
 
-- source text
-- brand
-- category
-- series name
-- episode number
-- target formats
-- character and world notes
-- continuity notes
-- next-episode hints
+## Navigation improvements
 
-## Series memory
+A global navigation bar is available on every screen:
 
-- Automatic next episode numbering
-- Series-level continuity notes
-- Character and world memory
-- Latest next-episode hint
-- Series overview
+- Home
+- Create
+- Manage
+- Performance and business
+- Other
 
-## Templates
+The Content Factory and Marketing Center now each include a visible Home button.
 
-Reusable templates store:
+## Existing major routes
 
-- brand
-- tone
-- audience
-- hook formula
-- content structure
-- CTA formula
-- safety notes
-- favorite status
+- `/factory/` Content Factory
+- `/marketing/` Marketing Center
+- `/pipeline/` Content Pipeline
+- `/library/` Content Library
+- `/home/` Simplified Home
 
-## Progress tracking
+## Small fix
 
-Each package tracks:
-
-- planning
-- script
-- filming
-- editing
-- review
-- publishing
-
-The completion percentage is calculated from these six saved stages.
-
-## Library workflow
-
-Each factory output can be saved to the existing Content Library in `검토` status.
-No content is automatically published.
+The Series Memory “next episode” button now carries the series name into the new-project screen.
 
 ## Safety
 
-- Drafts do not invent product names, prices, discounts, affiliate links, experiences, statistics, income, or performance.
-- User-entered source facts remain the authority.
-- Insurance and product wording still require manual review.
-- External publishing remains manual and approval-only.
-
-## Database
-
-V15 adds:
-
-- `content_factory_project`
-- `content_factory_output`
-- `content_factory_template`
-
-Existing tables are not altered.
+- No automatic external publishing
+- No invented product names, prices, links, income, statistics, or performance
+- Stored data remains the source of truth
+- External communication remains approval-only
 
 ## Verification
 
-- `/health` returns `15.0`
-- `/v9/status` returns `modular-foundation-v15.0`
+- `/health` returns `16.0`
+- `/v9/status` returns `modular-foundation-v16.0`
+- `/home/`
 - `/factory/`
-- `/factory/create`
-- `/factory/templates`
-- `/factory/series`
+- `/marketing/`
 - `/diagnostics/`
