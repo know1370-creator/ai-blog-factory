@@ -12,6 +12,7 @@ from .planner import WeeklyPlanItem
 from .analytics import ContentMetric
 from .social import SocialInteraction
 from .manager import HookPack, ReelPlan, ABExperiment
+from .library import ContentLibraryItem
 
 
 diagnostics_bp = Blueprint("diagnostics_v95", __name__, url_prefix="/diagnostics")
@@ -45,6 +46,7 @@ def dashboard():
         ("훅 생성 테이블", HookPack),
         ("릴스 기획 테이블", ReelPlan),
         ("A/B 실험 테이블", ABExperiment),
+        ("콘텐츠 라이브러리 테이블", ContentLibraryItem),
     ]
     for label, model in model_checks:
         try:

@@ -1,42 +1,40 @@
-# MI Creator Hub V10.0
+# MI Creator Hub V11.0
 
-V10 turns MI Creator Hub into a daily AI content manager.
+V11.0 adds the central content library and series manager.
 
-## New routes
+## New route
 
-- `/manager/`
-  - Daily operating brief
-  - Today's planner items
-  - Open social-reply workload
-  - Recent performance hint
-  - Recent hook, reel, and experiment activity
+- `/library/`
 
-- `/manager/hooks`
-  - Generates 20 hooks per topic
-  - 5 view hooks
-  - 5 save hooks
-  - 5 comment hooks
-  - 5 sales hooks
+## Features
 
-- `/manager/reels`
-  - Reel title and opening hook
-  - Second-by-second shooting table
-  - Camera direction
-  - Action, dialogue, subtitles
-  - Props, edit notes, caption, and CTA
-
-- `/manager/experiments`
-  - Create A/B content experiments
-  - Record views, reactions, and clicks
-  - Compare variants using the same weighted formula
-  - Mark experiments complete
+- Store a complete content project in one record
+- Brand, category, content type, and workflow status
+- Series name and episode number
+- Automatic next episode number for new projects
+- Full-text-style search across title, summary, hook, tags, scripts, captions, and drafts
+- Filters by brand, category, format, status, and favorite
+- Favorite projects
+- Duplicate a project to create the next variation or episode
+- Store:
+  - Instagram comic plan
+  - Reel/Shorts script
+  - Blog draft
+  - Instagram caption
+  - Threads text
+  - CTA
+  - Tags
+  - Reference or published URL
+- Link an existing Article record
+- Bulk-import existing blog articles that are not yet in the library
+- Series overview with project count and latest EP number
 
 ## Data integrity
 
-- AI does not invent product names, prices, or performance results.
-- A/B results use only numbers entered by the user.
-- Recent recommendations use only saved performance records.
-- Affiliate products and prices are never fabricated.
+- No products, links, prices, metrics, or episode history are invented.
+- Episode numbers are calculated only from saved projects.
+- Existing articles are imported from the app database.
+- Import does not delete or overwrite the original Article record.
 
 ## Deployment
 
@@ -45,16 +43,11 @@ Do not delete the database or Render environment variables.
 
 ## Verification
 
-- `/health` returns version `10.0`
-- `/v9/status` returns `modular-foundation-v10.0`
-- `/manager/` opens
-- `/manager/hooks` opens
-- `/manager/reels` opens
-- `/manager/experiments` opens
-- `/diagnostics/` shows all three V10 tables
+- `/health` returns `11.0`
+- `/v9/status` returns `modular-foundation-v11.0`
+- `/library/` opens
+- `/library/create` opens
+- `/library/import-articles` opens
+- `/diagnostics/` shows the content library table
 
-The new tables are created automatically:
-
-- `hook_pack`
-- `reel_plan`
-- `ab_experiment`
+The new `content_library_item` table is created automatically.

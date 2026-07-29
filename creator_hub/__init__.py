@@ -41,6 +41,10 @@ def create_app() -> Flask:
     if "manager_v10" not in app.blueprints:
         app.register_blueprint(manager_bp)
 
+    from .routes.library import library_bp
+    if "library_v11" not in app.blueprints:
+        app.register_blueprint(library_bp)
+
     with app.app_context():
         db.create_all()
 
