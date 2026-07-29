@@ -61,3 +61,7 @@ The Series Memory “next episode” button now carries the series name into the
 - `/factory/`
 - `/marketing/`
 - `/diagnostics/`
+
+
+## V16.0.1 hotfix
+- Fixed global navigation link from `generator_v12.index` to `generator_v12.generate`.

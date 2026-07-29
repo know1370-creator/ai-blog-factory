@@ -598,7 +598,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
       <summary>만들기</summary>
       <div class="nav-menu">
         <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
-        <a href="{{url_for('generator_v12.index')}}">AI 프로젝트 생성기</a>
+        <a href="{{url_for('generator_v12.generate')}}">AI 프로젝트 생성기</a>
         <a href="{{url_for('assistant_v92.index')}}">AI 콘텐츠 도우미</a>
         <a href="{{url_for('marketing_v14.ideas')}}">아이디어 뱅크</a>
       </div>
@@ -678,7 +678,7 @@ def home():
     progress_map = {a.id: pipeline_progress(a) for a in articles}
     return page("""
 <div class="card">
-<h1>MI Creator Hub <span class="status">V16.0</span></h1>
+<h1>MI Creator Hub <span class="status">V16.0.1</span></h1>
 <p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행과 수익화 링크까지 한 흐름으로 만들어요.</p>
 <div class="actions"><a class="btn" href="{{url_for('home_v16.dashboard')}}">쉬운 홈으로 가기</a><a class="btn gray" href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a><a class="btn gray" href="{{url_for('marketing_v14.dashboard')}}">AI 마케팅 센터</a><a class="btn gray" href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a><a class="btn gray" href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a><a class="btn gray" href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a><a class="btn gray" href="{{url_for('manager_v10.dashboard')}}">AI 콘텐츠 매니저</a><a class="btn gray" href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a><a class="btn gray" href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a><a class="btn gray" href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a><a class="btn gray" href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a><a class="btn gray" href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a><a class="btn gray" href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a><a class="btn gray" href="{{url_for('content_calendar')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('idea_lab')}}">AI 아이디어 연구소</a></div>
 <div class="stat-grid">
@@ -1427,7 +1427,7 @@ def content_calendar():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "16.0"}
+    return {"status": "ok", "version": "16.0.1"}
 
 
 if __name__ == "__main__":
