@@ -1,31 +1,42 @@
-# MI Creator Hub V9.6
+# MI Creator Hub V10.0
 
-V9.6 adds an approval-only AI engagement assistant.
+V10 turns MI Creator Hub into a daily AI content manager.
 
-## New screen
+## New routes
 
-- `/social/`
+- `/manager/`
+  - Daily operating brief
+  - Today's planner items
+  - Open social-reply workload
+  - Recent performance hint
+  - Recent hook, reel, and experiment activity
 
-## Features
+- `/manager/hooks`
+  - Generates 20 hooks per topic
+  - 5 view hooks
+  - 5 save hooks
+  - 5 comment hooks
+  - 5 sales hooks
 
-- Manually register Instagram, Threads, YouTube, or blog comments and inquiries
-- Basic local classification without API cost
-- AI classification into purchase inquiry, collaboration, question, compliment, complaint, spam, or general
-- Priority marking for messages that should be answered first
-- Generate three Korean reply drafts
-- Select or edit a reply
-- Explicit approval step
-- Mark as completed after the user manually posts the reply
-- Filter inbox by workflow status
+- `/manager/reels`
+  - Reel title and opening hook
+  - Second-by-second shooting table
+  - Camera direction
+  - Action, dialogue, subtitles
+  - Props, edit notes, caption, and CTA
 
-## Safety design
+- `/manager/experiments`
+  - Create A/B content experiments
+  - Record views, reactions, and clicks
+  - Compare variants using the same weighted formula
+  - Mark experiments complete
 
-- No automatic likes
-- No automatic comments
-- No unofficial login automation
-- No social-media password storage
-- No reply is externally posted in V9.6
-- The user remains in control of every external message
+## Data integrity
+
+- AI does not invent product names, prices, or performance results.
+- A/B results use only numbers entered by the user.
+- Recent recommendations use only saved performance records.
+- Affiliate products and prices are never fabricated.
 
 ## Deployment
 
@@ -34,9 +45,16 @@ Do not delete the database or Render environment variables.
 
 ## Verification
 
-- `/health` returns version `9.6`
-- `/v9/status` returns `modular-foundation-v9.6`
-- `/social/` opens normally
-- `/diagnostics/` shows the social assistant table as available
+- `/health` returns version `10.0`
+- `/v9/status` returns `modular-foundation-v10.0`
+- `/manager/` opens
+- `/manager/hooks` opens
+- `/manager/reels` opens
+- `/manager/experiments` opens
+- `/diagnostics/` shows all three V10 tables
 
-The new `social_interaction` table is created automatically.
+The new tables are created automatically:
+
+- `hook_pack`
+- `reel_plan`
+- `ab_experiment`
