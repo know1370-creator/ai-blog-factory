@@ -111,6 +111,7 @@ class Article(db.Model):
     thumbnail_path = db.Column(db.String(500), nullable=True)
     fortune_card_path = db.Column(db.String(500), nullable=True)
     fortune_card_paths = db.Column(db.Text, default="")  # JSON 리스트, 카드뉴스 여러 장
+    fortune_reel_path = db.Column(db.String(500), nullable=True)
     thumbnail_text = db.Column(db.String(300), nullable=True)
     blogger_post_id = db.Column(db.String(200), nullable=True)
     blogger_blog_id = db.Column(db.String(200), nullable=True)
@@ -224,6 +225,7 @@ def ensure_schema():
         "youtube_title": "VARCHAR(300)",
         "fortune_card_path": "VARCHAR(500)",
         "fortune_card_paths": "TEXT",
+        "fortune_reel_path": "VARCHAR(500)",
         "youtube_description": "TEXT",
         "youtube_tags": "VARCHAR(500)",
         "tiktok_caption": "TEXT",
@@ -835,6 +837,37 @@ def generate_fortune_carousel(article):
     filenames.append(compose_fortune_closing(background, today, article.id))
     filenames.append(compose_fortune_promo(background, today, article.id))
     return filenames
+
+
+def generate_fortune_reel_video(article, filenames):
+    """카드뉴스 이미지 7장을 순서대로 보여주는 슬라이드쇼 영상(mp4)을
+    만듭니다. 릴스로 바로 올릴 수 있는 형태입니다. imageio-ffmpeg는
+    ffmpeg 실행 파일을 패키지 안에 이미 내장하고 있어서, 서버(Render)에
+    ffmpeg가 따로 설치되어 있지 않아도 항상 작동합니다."""
+    import imageio
+    import numpy as np
+
+    fps = 12
+    seconds_per_image = 2.5
+    frames_per_image = int(fps * seconds_per_image)
+
+    output_filename = f"fortune_reel_{article.id}_{int(datetime.utcnow().timestamp())}.mp4"
+    output_path = MEDIA_DIR / output_filename
+
+    writer = imageio.get_writer(
+        str(output_path), fps=fps, codec="libx264",
+        format="ffmpeg", quality=7, macro_block_size=None,
+    )
+    try:
+        for filename in filenames:
+            img = Image.open(MEDIA_DIR / filename).convert("RGB")
+            frame = np.array(img)
+            for _ in range(frames_per_image):
+                writer.append_data(frame)
+    finally:
+        writer.close()
+
+    return output_filename
 
 
 
@@ -5486,6 +5519,34 @@ def generate_fortune_card_route(article_id):
     except Exception as e:
         db.session.rollback()
         flash(f"운세 카드 생성 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
+@app.post("/articles/<int:article_id>/fortune-reel")
+def generate_fortune_reel_route(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        filenames = json.loads(article.fortune_card_paths or "[]")
+    except json.JSONDecodeError:
+        filenames = []
+
+    if not filenames:
+        flash("먼저 위에서 운세 카드뉴스(7장)를 만들어 주세요.")
+        return redirect(url_for("edit_article", article_id=article.id))
+
+    try:
+        old_path = article.fortune_reel_path
+        video_filename = generate_fortune_reel_video(article, filenames)
+        article.fortune_reel_path = video_filename
+        db.session.commit()
+        if old_path and old_path != video_filename:
+            old_file = MEDIA_DIR / old_path
+            if old_file.exists():
+                old_file.unlink()
+        flash("릴스용 영상을 만들었어요. 다운로드하거나 바로 공유해보세요.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"릴스 영상 생성 실패: {e}")
     return redirect(url_for("edit_article", article_id=article.id))
 
 
