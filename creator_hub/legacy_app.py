@@ -27,6 +27,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from markupsafe import Markup
 from openai import OpenAI
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageDraw, ImageFont
 
@@ -56,6 +57,14 @@ app = Flask(__name__)
 APP_VERSION = "V33 ULTIMATE"
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# Render는 실제로는 https로 요청을 받지만, 내부적으로는 http로 우리
+# 서버에 전달하면서 "원래는 https였다"는 정보를 X-Forwarded-Proto라는
+# 헤더에 담아 보내줍니다. ProxyFix가 이 헤더를 읽어서, url_for(...,
+# _external=True)가 http가 아니라 https 링크를 만들도록 고쳐줍니다.
+# (이게 없으면 인스타그램 같은 외부 API에 http 링크를 보내게 되어
+# 이미지를 못 가져가는 문제가 생겼습니다.)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+app.config["PREFERRED_URL_SCHEME"] = "https"
 
 database_url = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'creator.db'}")
 if database_url.startswith("postgres://"):
