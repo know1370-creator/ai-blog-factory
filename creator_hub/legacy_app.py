@@ -520,7 +520,10 @@ def generate_zodiac_fortune_texts(article):
 규칙:
 - 12간지: 쥐, 소, 범, 토끼, 용, 뱀, 말, 양, 원숭이, 닭, 개, 돼지 (이
   순서 그대로 12개 전부 빠짐없이 작성)
-- 각 띠마다 정확히 4줄, 각 줄은 20자 이내의 실질적인 조언/기운 설명
+- 각 띠마다 정확히 4줄. 각 줄은 "~습니다/~하세요" 같은 자연스럽고
+  완결된 문장으로 쓰고, 28자 안팎(최대 34자)으로 씁니다. 키워드만
+  나열하지 말고 실제 조언이 되는 문장으로 씁니다.
+  예시 톤: "오전 일정은 머리로 기억하지 말고 알림을 하나 더 맞추세요"
 - 확정적 표현("무조건", "100%")은 쓰지 않고, 불안을 조장하는 표현도
   자제합니다.
 
@@ -643,43 +646,48 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
             radius=26, outline=color + (255,), width=4, fill=(255, 255, 255, 255),
         )
 
-        icon_size = box_height - 34
+        icon_size = box_height - 100
         try:
             icon = Image.open(MEDIA_DIR / get_zodiac_icon(animal)).convert("RGBA").resize((icon_size, icon_size))
             mask = Image.new("L", (icon_size, icon_size), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, icon_size, icon_size), fill=255)
-            image.paste(icon, (margin + 17, box_y + 17), mask)
+            image.paste(icon, (margin + 17, box_y + 14), mask)
             draw.ellipse(
-                (margin + 17, box_y + 17, margin + 17 + icon_size, box_y + 17 + icon_size),
+                (margin + 17, box_y + 14, margin + 17 + icon_size, box_y + 14 + icon_size),
                 outline=color + (255,), width=3,
             )
         except Exception:
             pass
 
-        label_font = get_korean_font(28, bold=True)
+        label_font = get_korean_font(26, bold=True)
         label_text = f"{animal}띠"
         bbox = draw.textbbox((0, 0), label_text, font=label_font)
         draw.text(
-            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + icon_size + 22),
+            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 12),
             label_text, font=label_font, fill=INK,
         )
 
         years = zodiac_birth_years(animal, reference_year=today.year)
         lines = texts.get(animal, [])
         year_font = get_korean_font(20, bold=True)
-        line_font = get_korean_font(23, bold=False)
+        line_font = get_korean_font(20, bold=False)
         text_x = margin + 17 + icon_size + 24
         text_w = width - margin - text_x - 20
-        row_h = (box_height - 24) // 4
-        text_y = box_y + 14
+        min_row_h = (box_height - 24) // 4
+        text_y = box_y + 12
         for row in range(4):
             year_label = str(years[row]) if row < len(years) else ""
             draw.text((text_x, text_y + 4), year_label, font=year_font, fill=color + (255,))
             line_text = lines[row] if row < len(lines) else ""
-            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 74)[:1]
+            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 74)
+            line_y = text_y
             for wline in wrapped:
-                draw.text((text_x + 74, text_y), wline, font=line_font, fill=INK)
-            text_y += row_h
+                draw.text((text_x + 74, line_y), wline, font=line_font, fill=INK)
+                line_y += 23
+            # 줄 수가 많으면(문장이 길면) 다음 항목을 그만큼 더 아래로
+            # 내려서, 절대 겹치거나 잘리지 않게 합니다.
+            used_h = max(min_row_h, len(wrapped) * 23 + 14)
+            text_y += used_h
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -694,12 +702,18 @@ def compose_fortune_closing(background, article_id):
     title_font = get_korean_font(52, bold=True)
     body_font = get_korean_font(28, bold=False)
 
-    y = height // 2 - 130
-    for line in ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]:
-        _centered_text(draw, line, title_font, y, width, INK)
-        y += 74
+    title_lines = ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]
+    line_h = 74
+    body_gap = 50
+    body_h = 40
+    total_h = line_h * len(title_lines) + body_gap + body_h
 
-    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + 40, width, MUTED)
+    y = (height - total_h) // 2
+    for line in title_lines:
+        _centered_text(draw, line, title_font, y, width, INK)
+        y += line_h
+
+    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + body_gap, width, MUTED)
 
     filename = f"fortune_closing_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -714,14 +728,43 @@ def compose_fortune_promo(background, article_id):
     title_font = get_korean_font(44, bold=True)
     price_font = get_korean_font(58, bold=True)
     body_font = get_korean_font(26, bold=False)
+    url_font = get_korean_font(30, bold=True)
 
-    y = 180
-    for line in ["나만의 자세한 운세가", "궁금하다면?"]:
+    fortune_url = os.getenv("FORTUNE_URL", "https://ai-blog-factory.onrender.com/fortune/")
+    title_lines = ["나만의 자세한 운세가", "궁금하다면?"]
+
+    title_line_h = 62
+    price_gap = 50
+    price_h = 70
+    url_gap = 60
+    url_h = 40
+    body_gap = 20
+    body_h = 34
+    total_h = (
+        title_line_h * len(title_lines) + price_gap + price_h
+        + url_gap + url_h + body_gap + body_h
+    )
+
+    y = (height - total_h) // 2
+    for line in title_lines:
         _centered_text(draw, line, title_font, y, width, INK)
-        y += 62
+        y += title_line_h
 
-    _centered_text(draw, "3,000원", price_font, y + 50, width, GOLD)
-    _centered_text(draw, "프로필 링크에서 생년월일 넣고 확인하세요", body_font, y + 150, width, MUTED)
+    y += price_gap
+    _centered_text(draw, "3,000원", price_font, y, width, GOLD)
+    y += price_h
+
+    y += url_gap
+    # 사진 안에는 실제로 눌리는 링크를 넣을 수 없어서(인스타그램 등은
+    # 프로필 링크만 클릭 가능), 주소 글자를 눈에 보이게 그대로 넣습니다.
+    draw.rounded_rectangle(
+        (width * 0.12, y - 14, width * 0.88, y + url_h + 6),
+        radius=16, outline=GOLD, width=3, fill=(250, 243, 230, 255),
+    )
+    _centered_text(draw, fortune_url.replace("https://", ""), url_font, y, width, GOLD)
+    y += url_h + body_gap
+
+    _centered_text(draw, "위 주소를 눌러(또는 검색해서) 생년월일을 넣어보세요", body_font, y, width, MUTED)
 
     filename = f"fortune_promo_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
