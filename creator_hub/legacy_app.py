@@ -5121,6 +5121,18 @@ def publish_instagram_route(article_id):
         flash("게시할 이미지가 없어요. 썸네일이나 인스타툰 이미지를 먼저 만들어 주세요.")
         return redirect(url_for("edit_article", article_id=article.id))
 
+    # 실제로 서버 디스크에 그 파일이 있는지 먼저 확인합니다. Render는
+    # 재배포될 때 이전에 만든 이미지 파일이 사라질 수 있어서, 여기서
+    # 미리 걸러내면 "사진이 아니다"라는 헷갈리는 에러 대신 정확한
+    # 원인을 바로 알려줄 수 있습니다.
+    if not (MEDIA_DIR / image_filename).exists():
+        flash(
+            f"게시하려던 이미지 파일이 서버에 없어요 ({image_filename}). "
+            "Render가 재배포되면서 예전 이미지가 사라졌을 수 있어요. "
+            "썸네일이나 인스타툰 이미지를 다시 만든 뒤 시도해 주세요."
+        )
+        return redirect(url_for("edit_article", article_id=article.id))
+
     image_url = url_for("media", filename=image_filename, _external=True)
 
     try:
@@ -5134,7 +5146,7 @@ def publish_instagram_route(article_id):
             db.session.commit()
         except Exception:
             db.session.rollback()
-        flash(f"인스타그램 게시 실패: {e}")
+        flash(f"인스타그램 게시 실패: {e} (사용한 이미지 주소: {image_url})")
 
     return redirect(url_for("edit_article", article_id=article.id))
 
