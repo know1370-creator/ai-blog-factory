@@ -230,6 +230,32 @@ html{scroll-behavior:smooth}
     </form>
   </div>
 
+  <div class="card" style="background:var(--paper);margin-top:16px">
+    <h3 style="margin-top:0">🖼️ 게시용 이미지</h3>
+    <p class="small">
+      아래 이미지가 인스타·Threads·유튜브·틱톡 카드에 공통으로 쓰여요.
+      띠별·별자리 운세처럼 내용을 카드에 보여주고 싶으면 "운세 카드
+      이미지 만들기"를 눌러 주세요 (일반 썸네일 사진 대신, 글 내용
+      요약이 적힌 카드 이미지가 만들어져요).
+    </p>
+    {% if a.fortune_card_path %}
+      <img src="{{ url_for('media', filename=a.fortune_card_path) }}" alt="운세 카드 이미지" style="width:100%;max-width:420px;border-radius:14px;margin-bottom:10px">
+    {% elif a.thumbnail_path %}
+      <img src="{{ url_for('media', filename=a.thumbnail_path) }}" alt="썸네일 이미지" style="width:100%;max-width:420px;border-radius:14px;margin-bottom:10px">
+      <p class="small">지금은 일반 썸네일이 대신 쓰이고 있어요.</p>
+    {% else %}
+      <p class="small">아직 이미지가 없어요.</p>
+    {% endif %}
+    <div class="actions" style="margin-top:0">
+      {% if a.fortune_card_path or a.thumbnail_path %}
+        <a class="btn gray" href="{{ url_for('media', filename=a.fortune_card_path or a.thumbnail_path) }}" download style="text-decoration:none">⬇️ 이미지 다운로드</a>
+      {% endif %}
+      <form method="post" action="{{ url_for('generate_fortune_card_route', article_id=a.id) }}">
+        <button class="btn" type="submit">🔮 운세 카드 이미지 {{ '다시 만들기' if a.fortune_card_path else '만들기' }}</button>
+      </form>
+    </div>
+  </div>
+
   <div class="grid" style="margin-top:18px">
     <article class="idea-card" style="margin:0">
       <span class="tag">Instagram</span>
@@ -244,8 +270,17 @@ html{scroll-behavior:smooth}
         >
           인스타 캡션 복사
         </button>
-        <form method="post" action="{{ url_for('publish_instagram_route', article_id=a.id) }}" style="margin-top:8px" onsubmit="return confirm('지금 바로 인스타그램에 게시할까요? 게시 후에는 취소할 수 없어요.')">
-          <button class="btn green" type="submit">📸 인스타그램에 바로 게시하기</button>
+        <button
+          class="btn green"
+          type="button"
+          style="margin-top:8px;width:100%"
+          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('instagram_text').value, 'instagram_share_status')"
+        >
+          📤 이미지+캡션 공유하기 (인스타그램 앱으로)
+        </button>
+        <p class="small" id="instagram_share_status" style="margin-top:6px"></p>
+        <form method="post" action="{{ url_for('publish_instagram_route', article_id=a.id) }}" style="margin-top:4px" onsubmit="return confirm('지금 바로 인스타그램에 게시할까요? 게시 후에는 취소할 수 없어요.')">
+          <button class="btn gray" type="submit" style="width:100%">📸 완전 자동 게시 (심사 완료 후 사용)</button>
         </form>
       {% else %}
         <p class="small">아직 생성된 인스타그램 캡션이 없습니다.</p>
@@ -265,6 +300,15 @@ html{scroll-behavior:smooth}
         >
           Threads 글 복사
         </button>
+        <button
+          class="btn green"
+          type="button"
+          style="margin-top:8px;width:100%"
+          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('threads_text').value, 'threads_share_status')"
+        >
+          📤 이미지+캡션 공유하기
+        </button>
+        <p class="small" id="threads_share_status" style="margin-top:6px"></p>
       {% else %}
         <p class="small">아직 생성된 Threads 글이 없습니다.</p>
       {% endif %}
@@ -302,6 +346,15 @@ html{scroll-behavior:smooth}
         >
           태그 복사
         </button>
+        <button
+          class="btn green"
+          type="button"
+          style="margin-top:8px;width:100%"
+          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('youtube_desc_text').value, 'youtube_share_status')"
+        >
+          📤 이미지+설명 공유하기
+        </button>
+        <p class="small" id="youtube_share_status" style="margin-top:6px"></p>
       {% else %}
         <p class="small">아직 생성된 유튜브 콘텐츠가 없습니다.</p>
       {% endif %}
@@ -320,6 +373,15 @@ html{scroll-behavior:smooth}
         >
           틱톡 캡션 복사
         </button>
+        <button
+          class="btn green"
+          type="button"
+          style="margin-top:8px;width:100%"
+          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('tiktok_text').value, 'tiktok_share_status')"
+        >
+          📤 이미지+캡션 공유하기
+        </button>
+        <p class="small" id="tiktok_share_status" style="margin-top:6px"></p>
       {% else %}
         <p class="small">아직 생성된 틱톡 캡션이 없습니다.</p>
       {% endif %}
@@ -2367,6 +2429,40 @@ html{scroll-behavior:smooth}
 </div>
 
 <script>
+async function shareToApp(imageUrl, caption, statusElId) {
+  const statusEl = statusElId ? document.getElementById(statusElId) : null;
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+  if (!imageUrl) {
+    setStatus('먼저 위에서 이미지를 만들어 주세요.');
+    return;
+  }
+  if (!navigator.share) {
+    setStatus('이 브라우저/기기에서는 공유하기가 안 돼요. 이미지를 다운로드하고 캡션을 복사해서 직접 올려주세요.');
+    return;
+  }
+  try {
+    setStatus('이미지 준비 중...');
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const file = new File([blob], 'post.png', { type: blob.type || 'image/png' });
+
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+      setStatus('이 브라우저에서는 이미지 공유가 안 돼요. 이미지를 다운로드하고 캡션을 복사해서 직접 올려주세요.');
+      return;
+    }
+
+    await navigator.share({ files: [file], text: caption });
+    setStatus('공유창에서 앱을 선택해 게시를 완료해 주세요.');
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      setStatus('');
+      return;
+    }
+    setStatus('공유 중 문제가 발생했어요: ' + (err.message || err));
+  }
+}
+
 function updateArticlePreview() {
   const editor = document.getElementById("body_html_editor");
   const preview = document.getElementById("article_live_preview");

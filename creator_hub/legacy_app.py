@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import math
 import os
@@ -108,6 +109,7 @@ class Article(db.Model):
     seo_score = db.Column(db.Integer, default=0)
     seo_report = db.Column(db.Text, default="{}")
     thumbnail_path = db.Column(db.String(500), nullable=True)
+    fortune_card_path = db.Column(db.String(500), nullable=True)
     thumbnail_text = db.Column(db.String(300), nullable=True)
     blogger_post_id = db.Column(db.String(200), nullable=True)
     blogger_blog_id = db.Column(db.String(200), nullable=True)
@@ -219,6 +221,7 @@ def ensure_schema():
         "threads_text": "TEXT",
         "shorts_script": "TEXT",
         "youtube_title": "VARCHAR(300)",
+        "fortune_card_path": "VARCHAR(500)",
         "youtube_description": "TEXT",
         "youtube_tags": "VARCHAR(500)",
         "tiktok_caption": "TEXT",
@@ -450,6 +453,115 @@ def generate_thumbnail(article, style, thumbnail_text):
     filename = f"article_{article.id}_{int(datetime.utcnow().timestamp())}.png"
     (MEDIA_DIR / filename).write_bytes(base64.b64decode(image_b64))
     return filename
+
+
+def generate_fortune_card_items(article):
+    """글 내용을 바탕으로 카드 이미지에 넣을 짧은 운세 항목
+    (라벨 + 한 줄 요약) 4~6개를 만듭니다. 인스타그램 등에 이미지로
+    바로 올릴 수 있는 정보 카드를 만들기 위한 용도입니다."""
+    prompt = f"""
+다음은 오늘의 운세/라이프스타일 콘텐츠 글입니다. 이 글 내용을 바탕으로,
+인스타그램 카드 이미지 안에 넣을 짧은 항목을 만드세요.
+
+제목: {article.title}
+본문: {plain_text_from_html(article.body_html)[:2000]}
+
+규칙:
+- 4~6개 항목
+- 각 항목은 "label"(예: 쥐띠, 물병자리 등 - 글 내용에 맞게. 띠/별자리
+  얘기가 아닌 글이면 핵심 키워드나 소제목으로 대체)과 "blurb"(15자
+  이내, 카드에 들어갈 아주 짧은 한 줄 요약)로 구성합니다.
+- 과장하지 않고, 확정적인 표현("무조건", "100%")은 쓰지 않습니다.
+
+반드시 아래 JSON 배열 형식으로만 답하세요. 다른 설명은 쓰지 마세요.
+[{{"label": "...", "blurb": "..."}}]
+"""
+    response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
+    log_ai_usage("text")
+    raw = strip_code_fence(response.output_text)
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\[.*\]", raw, re.S)
+        items = json.loads(match.group(0)) if match else []
+    if not isinstance(items, list):
+        items = []
+    return items[:6]
+
+
+def generate_fortune_card_background():
+    """운세 카드용 배경 이미지를 만듭니다. 글자는 나중에 따로
+    합성하므로, AI에게는 절대 글자를 그리지 말라고 지시합니다
+    (AI가 긴 텍스트를 정확히 그리지 못하기 때문입니다)."""
+    prompt = """
+Create a decorative, calming background illustration for a daily
+fortune / horoscope social media card. Soft mystical theme: stars,
+moon phases, soft gradient clouds, gentle zodiac-inspired motifs
+(no readable symbols). Warm deep-plum and gold color palette.
+
+ZERO-TEXT RULE:
+- No text, letters, numbers, words, or symbols that resemble writing.
+- Leave the top 30 percent and a wide margin on all sides visually
+  calm and uncluttered, since text will be added on top afterward.
+- Square 1:1 composition.
+"""
+    result = openai_client().images.generate(
+        model=IMAGE_MODEL,
+        prompt=prompt,
+        size="1024x1024",
+        quality="medium",
+    )
+    log_ai_usage("image")
+    image_b64 = result.data[0].b64_json
+    if not image_b64:
+        raise RuntimeError("운세 카드 배경 이미지 생성에 실패했습니다.")
+    return image_b64
+
+
+def compose_fortune_card(article, items, background_b64):
+    image = Image.open(io.BytesIO(base64.b64decode(background_b64))).convert("RGB")
+    width, height = image.size
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    margin = max(30, width // 24)
+    title_font = get_korean_font(56, bold=True)
+    label_font = get_korean_font(38, bold=True)
+    blurb_font = get_korean_font(32, bold=False)
+
+    # 아래쪽 절반 정도를 반투명 패널로 깔아서 글씨가 잘 읽히게 합니다.
+    panel_top = int(height * 0.32)
+    draw.rectangle((0, panel_top, width, height), fill=(28, 22, 44, 200))
+
+    title_text = article.thumbnail_text or article.title
+    title_lines = wrap_text_pixels(draw, title_text, title_font, width - margin * 2)[:2]
+    y = margin
+    for line in title_lines:
+        draw.text((margin, y), line, font=title_font, fill=(255, 255, 255, 255))
+        y += 66
+
+    y = panel_top + 26
+    for item in items:
+        if y > height - 60:
+            break
+        label = str(item.get("label", "")).strip()[:12]
+        blurb = str(item.get("blurb", "")).strip()[:24]
+        if label:
+            draw.text((margin, y), f"✦ {label}", font=label_font, fill=(230, 190, 140, 255))
+            y += 48
+        for wline in wrap_text_pixels(draw, blurb, blurb_font, width - margin * 2 - 24)[:2]:
+            draw.text((margin + 22, y), wline, font=blurb_font, fill=(255, 255, 255, 235))
+            y += 42
+        y += 16
+
+    filename = f"fortune_card_{article.id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def generate_fortune_card(article):
+    items = generate_fortune_card_items(article)
+    background_b64 = generate_fortune_card_background()
+    return compose_fortune_card(article, items, background_b64)
 
 
 
@@ -4954,6 +5066,25 @@ def generate_thumbnail_route(article_id):
     return redirect(url_for("edit_article", article_id=article.id))
 
 
+@app.post("/articles/<int:article_id>/fortune-card")
+def generate_fortune_card_route(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        old_path = article.fortune_card_path
+        filename = generate_fortune_card(article)
+        article.fortune_card_path = filename
+        db.session.commit()
+        if old_path and old_path != filename:
+            old_file = MEDIA_DIR / old_path
+            if old_file.exists():
+                old_file.unlink()
+        flash("운세 카드 이미지를 만들었어요. SNS 탭에서 바로 다운로드하실 수 있어요.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"운세 카드 생성 실패: {e}")
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
 @app.get("/media/<path:filename>")
 def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
@@ -5112,7 +5243,7 @@ def publish_instagram_route(article_id):
 
     # 게시할 이미지를 고릅니다: 썸네일이 있으면 썸네일, 없으면 인스타툰
     # 1컷(글씨 있는 버전)을 사용합니다.
-    image_filename = article.thumbnail_path
+    image_filename = article.fortune_card_path or article.thumbnail_path
     if not image_filename and article.instatoon_captioned_images:
         try:
             images_map = json.loads(article.instatoon_captioned_images)
