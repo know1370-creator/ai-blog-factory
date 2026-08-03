@@ -3383,6 +3383,9 @@ textarea{min-height:150px;resize:vertical}
   transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
 }
 .btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none;filter:none}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .btn.gray{background:#f1eef8;color:#3a3450;box-shadow:none}
 .btn.gray:hover{background:#e7e1f5}
 .btn.green{background:var(--ok);box-shadow:0 4px 14px rgba(18,122,83,.24)}
@@ -5690,31 +5693,58 @@ def fortune_quick_page():
 </section>
 
 <script>
+let fortuneQuickTimer = null;
+let fortuneQuickStartedAt = null;
+
+function fortuneQuickSetStep(text){
+  const status = document.getElementById('fortune_quick_status');
+  const elapsed = fortuneQuickStartedAt ? Math.floor((Date.now() - fortuneQuickStartedAt) / 1000) : 0;
+  status.innerHTML = `<span class="spin">⏳</span> ${text} <b>(경과 ${elapsed}초, 멈춘 게 아니라 실제로 돌아가는 중이에요)</b>`;
+}
+
 async function runFortuneQuick(){
   const btn = document.getElementById('fortune_quick_btn');
-  const status = document.getElementById('fortune_quick_status');
   btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> 처리 중이에요...';
+  fortuneQuickStartedAt = Date.now();
+  fortuneQuickTimer = setInterval(() => fortuneQuickSetStep(window.__fortuneQuickCurrentStep || '준비 중...'), 1000);
+
   try {
-    status.textContent = '1/3 띠 아이콘 준비 중...';
+    window.__fortuneQuickCurrentStep = '1/3 띠 아이콘 목록 확인 중...';
+    fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
     const r1 = await fetch("{{ url_for('fortune_quick_step_icons') }}", {method:'POST'});
     const d1 = await r1.json();
     if(!d1.ok) throw new Error(d1.error || '아이콘 준비 실패');
 
-    status.textContent = '2/3 글과 캡션 만드는 중...';
+    for (let i = 0; i < d1.animals.length; i++) {
+      const animal = d1.animals[i];
+      window.__fortuneQuickCurrentStep = `1/3 띠 아이콘 준비 중... (${i+1}/${d1.animals.length}: ${animal}띠)`;
+      fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
+      const ri = await fetch(`/fortune-quick/step-icon/${encodeURIComponent(animal)}`, {method:'POST'});
+      const di = await ri.json();
+      if(!di.ok) throw new Error(di.error || `${animal}띠 아이콘 생성 실패`);
+    }
+
+    window.__fortuneQuickCurrentStep = '2/3 글과 캡션 만드는 중...';
+    fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
     const r2 = await fetch("{{ url_for('fortune_quick_step_article') }}", {method:'POST'});
     const d2 = await r2.json();
     if(!d2.ok) throw new Error(d2.error || '글 생성 실패');
 
-    status.textContent = '3/3 운세 카드 이미지 7장 만드는 중...';
+    window.__fortuneQuickCurrentStep = '3/3 운세 카드 이미지 7장 만드는 중...';
+    fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
     const r3 = await fetch(`/fortune-quick/${d2.article_id}/step-images`, {method:'POST'});
     const d3 = await r3.json();
     if(!d3.ok) throw new Error(d3.error || '이미지 생성 실패');
 
-    status.textContent = '완료! 결과 화면으로 이동해요...';
+    clearInterval(fortuneQuickTimer);
+    document.getElementById('fortune_quick_status').textContent = '✅ 완료! 결과 화면으로 이동해요...';
     window.location.href = `/articles/${d2.article_id}#sns`;
   } catch(err) {
-    status.textContent = '실패했어요: ' + err.message;
+    clearInterval(fortuneQuickTimer);
+    document.getElementById('fortune_quick_status').textContent = '❌ 실패했어요: ' + err.message;
     btn.disabled = false;
+    btn.innerHTML = '🔮 오늘의 운세 콘텐츠 만들기';
   }
 }
 </script>
@@ -5723,10 +5753,18 @@ async function runFortuneQuick(){
 
 @app.post("/fortune-quick/step-icons")
 def fortune_quick_step_icons():
+    """예전 방식(12개 한 번에)은 시간이 너무 오래 걸려서 타임아웃이
+    났어요. 지금은 프론트엔드에서 동물 하나씩 따로 요청을 보내요."""
+    return jsonify({"ok": True, "animals": ZODIAC_ANIMALS})
+
+
+@app.post("/fortune-quick/step-icon/<animal>")
+def fortune_quick_step_one_icon(animal):
+    if animal not in ZODIAC_ANIMALS:
+        return jsonify({"ok": False, "error": "알 수 없는 띠입니다."}), 400
     try:
-        for animal in ZODIAC_ANIMALS:
-            get_zodiac_icon(animal)
-        return jsonify({"ok": True})
+        filename = get_zodiac_icon(animal)
+        return jsonify({"ok": True, "animal": animal, "filename": filename})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
