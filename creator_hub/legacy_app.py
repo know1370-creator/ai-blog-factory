@@ -557,35 +557,31 @@ def generate_zodiac_fortune_texts(article):
 
 
 def generate_fortune_shared_background():
-    """카드 7장이 전부 같은 배경을 공유합니다(장마다 새로 안 만들어서
-    비용과 시간을 아낍니다). 글자는 각 장마다 따로 합성합니다."""
-    prompt = """
-Create a dark cosmic background illustration: deep navy-to-black night
-sky with subtle stars, soft nebula clouds, a few faint shooting stars.
-Elegant and mysterious mood for a Korean daily fortune / saju social
-media card series.
-
-ZERO-TEXT RULE:
-- No text, letters, numbers, or symbols that resemble writing.
-- Keep the texture fairly even across the whole image (not too busy
-  in any one spot), since large text panels will be added on top
-  afterward in different places on different copies of this image.
-- Portrait 2:3 composition.
-"""
-    result = openai_client().images.generate(
-        model=IMAGE_MODEL, prompt=prompt, size="1024x1536", quality="medium"
-    )
-    log_ai_usage("image")
-    image_b64 = result.data[0].b64_json
-    if not image_b64:
-        raise RuntimeError("운세 카드 배경 이미지 생성에 실패했습니다.")
-    return Image.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGB")
+    """카드 7장이 전부 같은 배경을 씁니다. AI 이미지 대신 흰색 배경을
+    직접 그려서 만듭니다 — 이러면 100% 확실하게 밝고, 위에 올리는
+    글씨도 항상 잘 보이고, AI 이미지 호출을 하나 줄여서 더 빨라져요."""
+    width, height = 1024, 1536
+    image = Image.new("RGB", (width, height), (255, 253, 248))
+    draw = ImageDraw.Draw(image, "RGBA")
+    # 은은한 느낌을 주기 위한 아주 옅은 점 패턴(장식용, 글씨랑 안 겹치게 연하게)
+    import random
+    rnd = random.Random(42)
+    for _ in range(90):
+        x, y = rnd.randint(0, width), rnd.randint(0, height)
+        r = rnd.randint(1, 2)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=(230, 220, 200, 140))
+    return image
 
 
 def _centered_text(draw, text, font, y, width, fill):
     bbox = draw.textbbox((0, 0), text, font=font)
     x = (width - (bbox[2] - bbox[0])) // 2
     draw.text((x, y), text, font=font, fill=fill)
+
+
+INK = (34, 31, 43, 255)
+MUTED = (110, 100, 130, 255)
+GOLD = (184, 146, 90, 255)
 
 
 def compose_fortune_cover(background, article, today, article_id):
@@ -596,18 +592,18 @@ def compose_fortune_cover(background, article, today, article_id):
     cx, cy = width // 2, int(height * 0.42)
     r = int(width * 0.40)
     diamond = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy), (cx, cy - r)]
-    draw.line(diamond, fill=(255, 170, 220, 235), width=6)
+    draw.line(diamond, fill=GOLD, width=6)
     r2 = r - 20
     diamond2 = [(cx, cy - r2), (cx + r2, cy), (cx, cy + r2), (cx - r2, cy), (cx, cy - r2)]
-    draw.line(diamond2, fill=(255, 170, 220, 130), width=2)
+    draw.line(diamond2, fill=(184, 146, 90, 130), width=2)
 
     date_font = get_korean_font(38, bold=True)
     title_font = get_korean_font(66, bold=True)
     sub_font = get_korean_font(30, bold=True)
 
-    _centered_text(draw, today.strftime("%m월 %d일"), date_font, cy - 150, width, (255, 205, 130, 255))
-    _centered_text(draw, "오늘의 운세", title_font, cy - 80, width, (255, 255, 255, 255))
-    _centered_text(draw, "十二支", sub_font, cy + 6, width, (255, 205, 130, 200))
+    _centered_text(draw, today.strftime("%m월 %d일"), date_font, cy - 150, width, GOLD)
+    _centered_text(draw, "오늘의 운세", title_font, cy - 80, width, INK)
+    _centered_text(draw, "十二支", sub_font, cy + 6, width, MUTED)
 
     icon_size = int(r * 0.9)
     today_animal = ZODIAC_ANIMALS[(today.year - 1900) % 12]
@@ -619,7 +615,7 @@ def compose_fortune_cover(background, article, today, article_id):
         pass
 
     footer_font = get_korean_font(26, bold=True)
-    _centered_text(draw, "매일 아침 새로운 하루를 위한 오늘의 운세", footer_font, height - 90, width, (255, 255, 255, 210))
+    _centered_text(draw, "매일 아침 새로운 하루를 위한 오늘의 운세", footer_font, height - 90, width, MUTED)
 
     filename = f"fortune_cover_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -633,7 +629,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
     margin = 40
 
     title_font = get_korean_font(42, bold=True)
-    _centered_text(draw, f"{today.strftime('%m월 %d일')} 오늘의 띠별 운세", title_font, 44, width, (255, 220, 150, 255))
+    _centered_text(draw, f"{today.strftime('%m월 %d일')} 오늘의 띠별 운세", title_font, 44, width, INK)
 
     box_top = 130
     box_gap = 26
@@ -644,7 +640,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         box_y = box_top + i * (box_height + box_gap)
         draw.rounded_rectangle(
             (margin, box_y, width - margin, box_y + box_height),
-            radius=26, outline=color + (255,), width=4, fill=(12, 10, 22, 165),
+            radius=26, outline=color + (255,), width=4, fill=(255, 255, 255, 255),
         )
 
         icon_size = box_height - 34
@@ -665,7 +661,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         bbox = draw.textbbox((0, 0), label_text, font=label_font)
         draw.text(
             (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + icon_size + 22),
-            label_text, font=label_font, fill=(255, 255, 255, 255),
+            label_text, font=label_font, fill=INK,
         )
 
         years = zodiac_birth_years(animal, reference_year=today.year)
@@ -682,7 +678,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
             line_text = lines[row] if row < len(lines) else ""
             wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 74)[:1]
             for wline in wrapped:
-                draw.text((text_x + 74, text_y), wline, font=line_font, fill=(255, 255, 255, 235))
+                draw.text((text_x + 74, text_y), wline, font=line_font, fill=INK)
             text_y += row_h
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
@@ -700,10 +696,10 @@ def compose_fortune_closing(background, article_id):
 
     y = height // 2 - 130
     for line in ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]:
-        _centered_text(draw, line, title_font, y, width, (255, 222, 150, 255))
+        _centered_text(draw, line, title_font, y, width, INK)
         y += 74
 
-    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + 40, width, (255, 255, 255, 220))
+    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + 40, width, MUTED)
 
     filename = f"fortune_closing_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -721,11 +717,11 @@ def compose_fortune_promo(background, article_id):
 
     y = 180
     for line in ["나만의 자세한 운세가", "궁금하다면?"]:
-        _centered_text(draw, line, title_font, y, width, (255, 255, 255, 255))
+        _centered_text(draw, line, title_font, y, width, INK)
         y += 62
 
-    _centered_text(draw, "3,000원", price_font, y + 50, width, (255, 205, 130, 255))
-    _centered_text(draw, "프로필 링크에서 생년월일 넣고 확인하세요", body_font, y + 150, width, (255, 255, 255, 225))
+    _centered_text(draw, "3,000원", price_font, y + 50, width, GOLD)
+    _centered_text(draw, "프로필 링크에서 생년월일 넣고 확인하세요", body_font, y + 150, width, MUTED)
 
     filename = f"fortune_promo_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -733,8 +729,9 @@ def compose_fortune_promo(background, article_id):
 
 
 def generate_fortune_carousel(article):
-    """참고하신 계정처럼, 표지+띠별 운세 4장+마무리+홍보 카드까지
-    총 7장짜리 카드뉴스 세트를 만듭니다."""
+    """표지+띠별 운세 4장+마무리+홍보 카드까지 총 7장짜리 카드뉴스
+    세트를 만듭니다. 배경은 흰색 고정이라 AI 이미지 호출 없이 빠르게
+    만들어집니다."""
     today = datetime.utcnow().date()
     background = generate_fortune_shared_background()
     texts = generate_zodiac_fortune_texts(article)
