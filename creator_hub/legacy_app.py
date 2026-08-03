@@ -681,34 +681,34 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         except Exception:
             pass
 
-        label_font = get_korean_font(26, bold=True)
+        label_font = get_korean_font(34, bold=True)
         label_text = f"{animal}띠"
         bbox = draw.textbbox((0, 0), label_text, font=label_font)
         draw.text(
-            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 12),
+            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 8),
             label_text, font=label_font, fill=INK,
         )
 
         years = zodiac_birth_years(animal, reference_year=today.year)
         lines = texts.get(animal, [])
-        year_font = get_korean_font(20, bold=True)
-        line_font = get_korean_font(20, bold=False)
+        year_font = get_korean_font(25, bold=True)
+        line_font = get_korean_font(27, bold=False)
         text_x = margin + 17 + icon_size + 24
         text_w = width - margin - text_x - 20
         min_row_h = (box_height - 24) // 4
-        text_y = box_y + 12
+        text_y = box_y + 10
         for row in range(4):
             year_label = str(years[row]) if row < len(years) else ""
             draw.text((text_x, text_y + 4), year_label, font=year_font, fill=color + (255,))
             line_text = lines[row] if row < len(lines) else ""
-            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 74)
+            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 88)
             line_y = text_y
             for wline in wrapped:
-                draw.text((text_x + 74, line_y), wline, font=line_font, fill=INK)
-                line_y += 23
+                draw.text((text_x + 88, line_y), wline, font=line_font, fill=INK)
+                line_y += 32
             # 줄 수가 많으면(문장이 길면) 다음 항목을 그만큼 더 아래로
             # 내려서, 절대 겹치거나 잘리지 않게 합니다.
-            used_h = max(min_row_h, len(wrapped) * 23 + 14)
+            used_h = max(min_row_h, len(wrapped) * 32 + 14)
             text_y += used_h
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
@@ -716,7 +716,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
     return filename
 
 
-def compose_fortune_closing(background, article_id):
+def compose_fortune_closing(background, today, article_id):
     image = background.copy()
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
@@ -724,13 +724,23 @@ def compose_fortune_closing(background, article_id):
     title_font = get_korean_font(52, bold=True)
     body_font = get_korean_font(28, bold=False)
 
+    icon_size = int(width * 0.32)
     title_lines = ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]
     line_h = 74
-    body_gap = 50
+    icon_gap = 30
+    body_gap = 40
     body_h = 40
-    total_h = line_h * len(title_lines) + body_gap + body_h
+    total_h = icon_size + icon_gap + line_h * len(title_lines) + body_gap + body_h
 
     y = (height - total_h) // 2
+    today_animal = ZODIAC_ANIMALS[(today.year - 1900) % 12]
+    try:
+        icon = Image.open(MEDIA_DIR / get_zodiac_icon(today_animal)).convert("RGBA").resize((icon_size, icon_size))
+        image.paste(icon, ((width - icon_size) // 2, y), icon)
+    except Exception:
+        pass
+    y += icon_size + icon_gap
+
     for line in title_lines:
         _centered_text(draw, line, title_font, y, width, INK)
         y += line_h
@@ -742,7 +752,7 @@ def compose_fortune_closing(background, article_id):
     return filename
 
 
-def compose_fortune_promo(background, article_id):
+def compose_fortune_promo(background, today, article_id):
     image = background.copy()
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
@@ -755,6 +765,8 @@ def compose_fortune_promo(background, article_id):
     fortune_url = os.getenv("FORTUNE_URL", "https://ai-blog-factory.onrender.com/fortune/")
     title_lines = ["나만의 자세한 운세가", "궁금하다면?"]
 
+    icon_size = int(width * 0.26)
+    icon_gap = 30
     title_line_h = 62
     price_gap = 50
     price_h = 70
@@ -763,11 +775,20 @@ def compose_fortune_promo(background, article_id):
     body_gap = 20
     body_h = 34
     total_h = (
-        title_line_h * len(title_lines) + price_gap + price_h
+        icon_size + icon_gap
+        + title_line_h * len(title_lines) + price_gap + price_h
         + url_gap + url_h + body_gap + body_h
     )
 
     y = (height - total_h) // 2
+    today_animal = ZODIAC_ANIMALS[(today.year - 1900) % 12]
+    try:
+        icon = Image.open(MEDIA_DIR / get_zodiac_icon(today_animal)).convert("RGBA").resize((icon_size, icon_size))
+        image.paste(icon, ((width - icon_size) // 2, y), icon)
+    except Exception:
+        pass
+    y += icon_size + icon_gap
+
     for line in title_lines:
         _centered_text(draw, line, title_font, y, width, INK)
         y += title_line_h
@@ -805,8 +826,8 @@ def generate_fortune_carousel(article):
     for i in range(4):
         subset = ZODIAC_ANIMALS[i * 3:(i + 1) * 3]
         filenames.append(compose_zodiac_slide(background, today, subset, texts, i + 1, article.id))
-    filenames.append(compose_fortune_closing(background, article.id))
-    filenames.append(compose_fortune_promo(background, article.id))
+    filenames.append(compose_fortune_closing(background, today, article.id))
+    filenames.append(compose_fortune_promo(background, today, article.id))
     return filenames
 
 
