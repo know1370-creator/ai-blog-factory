@@ -669,49 +669,47 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         )
 
         icon_size = box_height - 150
+        label_font = get_korean_font(30, bold=True)
+        label_text = f"{animal}띠"
+        label_gap = 12
+        icon_block_h = icon_size + label_gap + 38
+        icon_block_y = box_y + (box_height - icon_block_h) // 2
+
         try:
             icon = Image.open(MEDIA_DIR / get_zodiac_icon(animal)).convert("RGBA").resize((icon_size, icon_size))
             mask = Image.new("L", (icon_size, icon_size), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, icon_size, icon_size), fill=255)
-            image.paste(icon, (margin + 17, box_y + 14), mask)
+            image.paste(icon, (margin + 17, icon_block_y), mask)
             draw.ellipse(
-                (margin + 17, box_y + 14, margin + 17 + icon_size, box_y + 14 + icon_size),
+                (margin + 17, icon_block_y, margin + 17 + icon_size, icon_block_y + icon_size),
                 outline=color + (255,), width=3,
             )
         except Exception:
             pass
 
-        label_font = get_korean_font(30, bold=True)
-        label_text = f"{animal}띠"
         bbox = draw.textbbox((0, 0), label_text, font=label_font)
         draw.text(
-            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 10),
+            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, icon_block_y + icon_size + label_gap),
             label_text, font=label_font, fill=INK,
         )
 
         years = zodiac_birth_years(animal, reference_year=today.year)
         lines = texts.get(animal, [])
-        year_font = get_korean_font(23, bold=True)
-        line_font = get_korean_font(23, bold=False)
+        year_font = get_korean_font(25, bold=True)
+        line_font = get_korean_font(25, bold=False)
         text_x = margin + 17 + icon_size + 16
         text_w = width - margin - text_x - 20
-        row_gap = 18
-        min_row_h = (box_height - 24) // 4
-        text_y = box_y + row_gap
+        row_h = box_height / 4
         for row in range(4):
+            row_top = box_y + row * row_h
             year_label = str(years[row]) if row < len(years) else ""
-            draw.text((text_x, text_y + 3), year_label, font=year_font, fill=color + (255,))
+            draw.text((text_x, row_top + 14), year_label, font=year_font, fill=color + (255,))
             line_text = lines[row] if row < len(lines) else ""
-            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 72)
-            line_y = text_y
+            wrapped = wrap_text_by_words(draw, line_text, line_font, text_w - 72)
+            line_y = row_top + 12
             for wline in wrapped:
                 draw.text((text_x + 72, line_y), wline, font=line_font, fill=INK)
-                line_y += 29
-            # 줄 수가 많으면(문장이 길면) 다음 항목을 그만큼 더 아래로
-            # 내려서, 절대 겹치거나 잘리지 않게 합니다. 항목 사이 여백은
-            # 위쪽 첫 줄과 똑같이 row_gap만큼 항상 넣어서 간격을 통일합니다.
-            used_h = max(min_row_h, len(wrapped) * 29 + row_gap)
-            text_y += used_h
+                line_y += 30
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -1178,6 +1176,42 @@ def get_korean_font(size, bold=True):
         "할 수 있으니, 가능하면 폰트 파일을 static/fonts/ 폴더에 직접 넣어두는 것을 "
         "추천합니다.)"
     )
+
+
+def wrap_text_by_words(draw, text, font, max_width):
+    """글자 하나씩이 아니라 띄어쓰기(단어) 단위로 줄바꿈합니다.
+    글자 단위로 자르면 "신중하세" + "요." 처럼 단어 중간이 끊겨
+    어색해 보일 수 있어서, 운세 카드처럼 자연스러운 문장이 중요한
+    곳에서는 이 함수를 씁니다."""
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    if not text:
+        return []
+
+    words = text.split(" ")
+    lines = []
+    current = ""
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        bbox = draw.textbbox((0, 0), candidate, font=font)
+        if bbox[2] - bbox[0] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            # 단어 하나가 그 자체로도 너무 길면(줄 폭보다 크면), 어쩔 수
+            # 없이 그 단어만 글자 단위로 다시 쪼갭니다.
+            word_bbox = draw.textbbox((0, 0), word, font=font)
+            if word_bbox[2] - word_bbox[0] > max_width:
+                lines.extend(wrap_text_pixels(draw, word, font, max_width))
+                current = ""
+            else:
+                current = word
+
+    if current:
+        lines.append(current)
+
+    return lines
 
 
 def wrap_text_pixels(draw, text, font, max_width):
