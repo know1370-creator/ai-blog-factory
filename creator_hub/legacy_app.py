@@ -1023,18 +1023,33 @@ def get_korean_font(size, bold=True):
         if path.exists():
             return ImageFont.truetype(str(font_path), size=size)
 
-    # 정확한 파일명을 못 찾았으면, 시스템에 설치된 폰트 폴더 전체에서
-    # 이름에 한글 폰트로 흔히 쓰이는 이름이 들어간 파일을 찾아봅니다.
-    # 주의: "gothic"만으로 판단하면 URW Gothic 같은 영어 전용 폰트까지
-    # 한글 폰트로 잘못 골라져서, 숫자·기호는 그려지고 한글만 안 보이는
-    # 문제가 생깁니다. 그래서 실제로 한글을 지원하는 폰트 이름만 매칭합니다.
+    # 정확한 파일명을 못 찾았으면, 시스템에 설치된 폰트를 하나씩 실제로
+    # 테스트해봅니다. 이름만 보고 판단하면("gothic"처럼 흔한 단어) 한글을
+    # 지원 안 하는 영어 전용 폰트를 잘못 고를 수도, 진짜 한글 폰트를
+    # 놓칠 수도 있어서, 실제로 한글 글자("한")를 그려서 확인합니다.
+    def supports_hangul(font_path):
+        try:
+            test_font = ImageFont.truetype(str(font_path), size=20)
+            # 폰트가 "한"을 실제로 그릴 수 있는지 확인합니다. 없는
+            # 글자를 그리면 폰트들이 보통 빈 사각형(notdef) 대체
+            # 글리프를 보여주는데, bbox만 보면 그 대체 글리프도
+            # 크기가 있어서 "있다"고 착각할 수 있습니다. 그래서
+            # 절대 존재할 리 없는 사용자 영역 코드(U+E000)를 그린
+            # 결과와 비교해서, 완전히 똑같으면(=둘 다 대체 글리프)
+            # 한글 지원이 없는 것으로 판단합니다.
+            hangul_mask = bytes(test_font.getmask("한"))
+            missing_mask = bytes(test_font.getmask("\ue000"))
+            return hangul_mask != missing_mask
+        except Exception:
+            return False
+
     korean_tags = (
         "nanum", "noto", "cjk", "malgun", "unfont", "batang",
-        "dotum", "gulim", "gungsuh", "notosanskr", "notoseriffkr",
-        "notosanscjk", "pretendard", "spoqa",
+        "dotum", "gulim", "gungsuh", "gothic", "pretendard", "spoqa",
+        "source han", "sourcehan", "wqy", "droid sans fallback",
     )
     keyword = "bold" if bold else "regular"
-    fallback_match = None
+    named_matches = []
     for fonts_root in ("/usr/share/fonts", "/usr/local/share/fonts"):
         root = Path(fonts_root)
         if not root.exists():
@@ -1044,13 +1059,28 @@ def get_korean_font(size, bold=True):
                 continue
             name = font_file.name.lower()
             if any(tag in name for tag in korean_tags):
-                if keyword in name:
-                    return ImageFont.truetype(str(font_file), size=size)
-                if fallback_match is None:
-                    fallback_match = font_file
+                named_matches.append(font_file)
 
-    if fallback_match:
-        return ImageFont.truetype(str(fallback_match), size=size)
+    # 이름에 keyword(bold/regular)까지 일치하는 것을 먼저 시도하고,
+    # 그다음 나머지 이름-일치 후보들을 시도합니다. 각 후보는 실제로
+    # 한글을 그릴 수 있는지 확인한 뒤에만 사용합니다.
+    named_matches.sort(key=lambda p: (keyword not in p.name.lower()))
+    for font_file in named_matches:
+        if supports_hangul(font_file):
+            return ImageFont.truetype(str(font_file), size=size)
+
+    # 이름으로 못 찾았으면, 폰트 폴더 전체를 다시 훑으면서 이번엔
+    # 이름 상관없이 전부 실제로 한글이 그려지는지 테스트합니다
+    # (최후의 수단이라 시간이 조금 더 걸릴 수 있습니다).
+    for fonts_root in ("/usr/share/fonts", "/usr/local/share/fonts"):
+        root = Path(fonts_root)
+        if not root.exists():
+            continue
+        for font_file in root.rglob("*"):
+            if font_file.suffix.lower() not in (".ttf", ".ttc", ".otf"):
+                continue
+            if supports_hangul(font_file):
+                return ImageFont.truetype(str(font_file), size=size)
 
     # 한글 폰트를 정말 하나도 못 찾은 경우: 여기서 조용히 영문 기본 폰트로
     # 넘어가면 이미지에 글씨가 안 보이는 채로 계속 나오니, 원인을 바로
