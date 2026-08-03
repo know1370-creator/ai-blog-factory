@@ -668,7 +668,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
             radius=26, outline=color + (255,), width=4, fill=(255, 255, 255, 255),
         )
 
-        icon_size = box_height - 100
+        icon_size = box_height - 150
         try:
             icon = Image.open(MEDIA_DIR / get_zodiac_icon(animal)).convert("RGBA").resize((icon_size, icon_size))
             mask = Image.new("L", (icon_size, icon_size), 0)
@@ -681,34 +681,36 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         except Exception:
             pass
 
-        label_font = get_korean_font(34, bold=True)
+        label_font = get_korean_font(30, bold=True)
         label_text = f"{animal}띠"
         bbox = draw.textbbox((0, 0), label_text, font=label_font)
         draw.text(
-            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 8),
+            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + 14 + icon_size + 10),
             label_text, font=label_font, fill=INK,
         )
 
         years = zodiac_birth_years(animal, reference_year=today.year)
         lines = texts.get(animal, [])
-        year_font = get_korean_font(25, bold=True)
-        line_font = get_korean_font(27, bold=False)
-        text_x = margin + 17 + icon_size + 24
+        year_font = get_korean_font(23, bold=True)
+        line_font = get_korean_font(23, bold=False)
+        text_x = margin + 17 + icon_size + 16
         text_w = width - margin - text_x - 20
+        row_gap = 18
         min_row_h = (box_height - 24) // 4
-        text_y = box_y + 10
+        text_y = box_y + row_gap
         for row in range(4):
             year_label = str(years[row]) if row < len(years) else ""
-            draw.text((text_x, text_y + 4), year_label, font=year_font, fill=color + (255,))
+            draw.text((text_x, text_y + 3), year_label, font=year_font, fill=color + (255,))
             line_text = lines[row] if row < len(lines) else ""
-            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 88)
+            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 72)
             line_y = text_y
             for wline in wrapped:
-                draw.text((text_x + 88, line_y), wline, font=line_font, fill=INK)
-                line_y += 32
+                draw.text((text_x + 72, line_y), wline, font=line_font, fill=INK)
+                line_y += 29
             # 줄 수가 많으면(문장이 길면) 다음 항목을 그만큼 더 아래로
-            # 내려서, 절대 겹치거나 잘리지 않게 합니다.
-            used_h = max(min_row_h, len(wrapped) * 32 + 14)
+            # 내려서, 절대 겹치거나 잘리지 않게 합니다. 항목 사이 여백은
+            # 위쪽 첫 줄과 똑같이 row_gap만큼 항상 넣어서 간격을 통일합니다.
+            used_h = max(min_row_h, len(wrapped) * 29 + row_gap)
             text_y += used_h
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
@@ -721,31 +723,37 @@ def compose_fortune_closing(background, today, article_id):
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
 
-    title_font = get_korean_font(52, bold=True)
+    title_font = get_korean_font(50, bold=True)
     body_font = get_korean_font(28, bold=False)
 
-    icon_size = int(width * 0.32)
     title_lines = ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]
-    line_h = 74
-    icon_gap = 30
-    body_gap = 40
-    body_h = 40
-    total_h = icon_size + icon_gap + line_h * len(title_lines) + body_gap + body_h
+    line_h = 68
+    pad_top = 56
+    pad_between = 30
+    pad_bottom = 50
 
-    y = (height - total_h) // 2
-    today_animal = ZODIAC_ANIMALS[(today.year - 1900) % 12]
-    try:
-        icon = Image.open(MEDIA_DIR / get_zodiac_icon(today_animal)).convert("RGBA").resize((icon_size, icon_size))
-        image.paste(icon, ((width - icon_size) // 2, y), icon)
-    except Exception:
-        pass
-    y += icon_size + icon_gap
+    box_content_h = pad_top + line_h * len(title_lines) + pad_between + 40 + pad_bottom
+    box_w = int(width * 0.8)
+    box_x = (width - box_w) // 2
+    box_y = (height - box_content_h) // 2
 
+    # 허전해 보이지 않게, 아이콘 대신 은은한 테두리의 예쁜 글씨 박스를 넣습니다.
+    draw.rounded_rectangle(
+        (box_x, box_y, box_x + box_w, box_y + box_content_h),
+        radius=32, outline=GOLD, width=3, fill=(250, 246, 236, 255),
+    )
+    accent_w = 60
+    draw.rounded_rectangle(
+        (width // 2 - accent_w // 2, box_y + 22, width // 2 + accent_w // 2, box_y + 26),
+        radius=2, fill=GOLD,
+    )
+
+    y = box_y + pad_top
     for line in title_lines:
         _centered_text(draw, line, title_font, y, width, INK)
         y += line_h
 
-    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + body_gap, width, MUTED)
+    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + pad_between, width, MUTED)
 
     filename = f"fortune_closing_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
