@@ -550,14 +550,33 @@ def generate_zodiac_fortune_texts(article):
         "작은 배려가 좋은 인연을 만듭니다",
         "여유를 갖고 하루를 마무리해보세요",
     ]
+    sentence_endings = (
+        "세요", "니다", "봐요", "해요", "돼요", "구요", "라요", "네요",
+        "어요", "아요", "죠", "함", "임", "다.", "요.",
+    )
+
+    def looks_complete(text):
+        text = text.strip()
+        return bool(text) and text.endswith(sentence_endings)
+
     for animal in ZODIAC_ANIMALS:
         lines = data.get(animal)
         if not isinstance(lines, list) or not lines:
             data[animal] = list(fallback)
         else:
-            cleaned = [str(x).strip()[:22] for x in lines[:4] if str(x).strip()]
+            cleaned = []
+            for x in lines[:4]:
+                text = str(x).strip()
+                # 22자로 강제로 자르던 부분을 없앴습니다(문장이 잘리던
+                # 진짜 원인이었어요). 대신 문장이 끝까지 완성됐는지만
+                # 확인하고, 중간에 끊긴 것 같으면 안전한 문장으로
+                # 바꿉니다.
+                if text and looks_complete(text):
+                    cleaned.append(text)
+                elif text:
+                    cleaned.append(fallback[len(cleaned) % len(fallback)])
             while len(cleaned) < 4:
-                cleaned.append(fallback[len(cleaned)])
+                cleaned.append(fallback[len(cleaned) % len(fallback)])
             data[animal] = cleaned
     return data
 
