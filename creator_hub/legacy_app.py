@@ -996,6 +996,38 @@ def parse_instatoon_cut_fields(cut_text):
     return fields
 
 
+KOREAN_FONT_DOWNLOAD_URLS = {
+    "NanumGothic-Bold.ttf": "https://github.com/google/fonts/raw/refs/heads/main/ofl/nanumgothic/NanumGothic-Bold.ttf",
+    "NanumGothic-Regular.ttf": "https://github.com/google/fonts/raw/refs/heads/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
+}
+_korean_font_download_attempted = False
+
+
+def ensure_bundled_korean_font():
+    """Render는 재배포될 때마다 서버를 완전히 새로 만들어서, 터미널에서
+    설치했던 폰트는 다음 배포에는 남아있지 않습니다. 그래서 프로젝트
+    폴더(static/fonts) 안에 폰트 파일이 없으면, 구글의 공식 폰트
+    저장소에서 한 번 받아와 저장해둡니다. 한 번 받아두면 그다음부터는
+    다시 안 받고 그대로 사용합니다."""
+    global _korean_font_download_attempted
+    if _korean_font_download_attempted:
+        return
+    _korean_font_download_attempted = True
+
+    fonts_dir = BASE_DIR / "static" / "fonts"
+    fonts_dir.mkdir(parents=True, exist_ok=True)
+    for filename, url in KOREAN_FONT_DOWNLOAD_URLS.items():
+        target = fonts_dir / filename
+        if target.exists() and target.stat().st_size > 1000:
+            continue
+        try:
+            response = requests.get(url, timeout=20)
+            if response.status_code == 200 and len(response.content) > 1000:
+                target.write_bytes(response.content)
+        except Exception:
+            pass  # 다운로드 실패해도 조용히 넘어가고, 시스템 폰트 검색으로 넘어갑니다.
+
+
 def get_korean_font(size, bold=True):
     """한글이 이미지에 안 보이는 문제의 대부분은 서버(컨테이너)에 한글 폰트가
     아예 설치되어 있지 않아서 발생합니다. Pillow의 기본 폰트(load_default)는
@@ -1003,7 +1035,10 @@ def get_korean_font(size, bold=True):
     네모(tofu)만 보이게 됩니다. 그래서 정확한 파일명 몇 개만 보는 대신,
     폰트 폴더 전체를 뒤져서 한글 폰트로 보이는 파일을 최대한 찾아봅니다.
     """
+    ensure_bundled_korean_font()
+
     exact_candidates = [
+        str(BASE_DIR / "static" / "fonts" / ("NanumGothic-Bold.ttf" if bold else "NanumGothic-Regular.ttf")),
         (
             "/usr/share/fonts/truetype/nanum/"
             + ("NanumBarunGothicBold.ttf" if bold else "NanumBarunGothic.ttf")
