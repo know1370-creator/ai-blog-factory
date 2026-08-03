@@ -242,7 +242,7 @@ document.querySelectorAll('.calendar-day').forEach((day) => {
         prev_month=month_shift(month_start, -1).strftime("%Y-%m"),
         current_month=date.today().strftime("%Y-%m"),
         next_month=month_shift(month_start, 1).strftime("%Y-%m"),
-        page_title="콘텐츠 캘린더 | MI Creator Hub",
+        page_title="콘텐츠 캘린더 | MI Creator OS",
     )
 
 
@@ -377,5 +377,5 @@ def operations():
         scheduled=scheduled,
         published=published,
         recent=recent,
-        page_title="운영 대시보드 | MI Creator Hub",
+        page_title="운영 대시보드 | MI Creator OS",
     )

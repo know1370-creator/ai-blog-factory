@@ -301,7 +301,7 @@ def dashboard():
         platforms=PLATFORMS,
         types=TYPES,
         categories=CATEGORIES,
-        page_title="AI 소통 비서 | MI Creator Hub",
+        page_title="AI 소통 비서 | MI Creator OS",
     )
 
 

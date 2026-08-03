@@ -295,7 +295,7 @@ def dashboard():
         rows=rows,
         recommendations=recommendations(rows),
         today=date.today(),
-        page_title="콘텐츠 성과 분석 | MI Creator Hub",
+        page_title="콘텐츠 성과 분석 | MI Creator OS",
     )
 
 

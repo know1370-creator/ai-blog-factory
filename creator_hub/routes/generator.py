@@ -309,7 +309,7 @@ def dashboard():
         goals=CONTENT_GOALS,
         formats=FORMATS,
         recent=recent,
-        page_title="AI 프로젝트 자동 생성기 | MI Creator Hub",
+        page_title="AI 프로젝트 자동 생성기 | MI Creator OS",
     )
 
 

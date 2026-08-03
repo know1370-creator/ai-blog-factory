@@ -199,7 +199,7 @@ def board():
 .pipeline-card:active{cursor:grabbing}
 .pipeline-card.dragging{opacity:.45}
 .progress-track{height:7px;background:#eceef3;border-radius:99px;overflow:hidden;margin:9px 0}
-.progress-fill{height:100%;background:linear-gradient(90deg,#4f46e5,#7c3aed)}
+.progress-fill{height:100%;background:#4b3f72}
 .priority-high{border-left:5px solid #dc2626}
 .priority-normal{border-left:5px solid #f59e0b}
 .priority-low{border-left:5px solid #64748b}
@@ -395,7 +395,7 @@ def board():
         overdue_count=overdue_count,
         due_today_count=due_today_count,
         today=date.today(),
-        page_title="콘텐츠 파이프라인 | MI Creator Hub",
+        page_title="콘텐츠 파이프라인 | MI Creator OS",
     )
 
 
@@ -512,7 +512,7 @@ def edit_meta(item_id):
         meta=meta,
         statuses=PIPELINE_STATUSES,
         priorities=PRIORITIES,
-        page_title="파이프라인 업무 설정 | MI Creator Hub",
+        page_title="파이프라인 업무 설정 | MI Creator OS",
     )
 
 
@@ -576,5 +576,5 @@ def brief():
         tasks=tasks,
         upcoming=upcoming,
         today=date.today(),
-        page_title="오늘의 콘텐츠 브리핑 | MI Creator Hub",
+        page_title="오늘의 콘텐츠 브리핑 | MI Creator OS",
     )

@@ -65,6 +65,10 @@ def create_app() -> Flask:
     if "home_v16" not in app.blueprints:
         app.register_blueprint(home_bp)
 
+    from .routes.fortune import fortune_bp
+    if "fortune_v1" not in app.blueprints:
+        app.register_blueprint(fortune_bp)
+
 
     required_navigation_endpoints = [
         "home_v16.dashboard",

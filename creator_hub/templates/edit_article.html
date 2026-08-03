@@ -1,0 +1,2885 @@
+<style>
+html{scroll-behavior:smooth}
+.css-tabs-shell{position:relative}
+.css-tab-input{position:absolute;opacity:0;pointer-events:none}
+.content-tabs{
+  position:sticky;
+  top:62px;
+  z-index:40;
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:12px;
+  margin-bottom:18px;
+  background:rgba(247,248,252,.96);
+  backdrop-filter:blur(10px);
+  border:1px solid var(--line);
+  border-radius:16px;
+}
+.content-tab-label{
+  flex:0 0 auto;
+  border-radius:999px;
+  padding:10px 15px;
+  background:#edf0f4;
+  color:#374151;
+  font-weight:800;
+  cursor:pointer;
+  user-select:none;
+}
+.css-tab-panel{display:none}
+#tab-blog:checked ~ .content-tabs label[for="tab-blog"],
+#tab-sns:checked ~ .content-tabs label[for="tab-sns"],
+#tab-instatoon:checked ~ .content-tabs label[for="tab-instatoon"],
+#tab-seo:checked ~ .content-tabs label[for="tab-seo"],
+#tab-publish:checked ~ .content-tabs label[for="tab-publish"]{
+  background:var(--brand);
+  color:#fff;
+}
+#tab-blog:checked ~ .css-tab-panels [data-panel="blog"],
+#tab-sns:checked ~ .css-tab-panels [data-panel="sns"],
+#tab-instatoon:checked ~ .css-tab-panels [data-panel="instatoon"],
+#tab-seo:checked ~ .css-tab-panels [data-panel="seo"],
+#tab-publish:checked ~ .css-tab-panels [data-panel="publish"]{
+  display:block;
+}
+.instatoon-subtab-input{position:absolute;opacity:0;pointer-events:none}
+.instatoon-subtab-menu{
+  position:sticky;top:8px;z-index:35;
+  display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto;
+  padding:10px 12px;margin-bottom:16px;
+  background:rgba(255,255,255,.97);backdrop-filter:blur(10px);
+  border:1px solid #e5e7eb;border-radius:16px;
+}
+.instatoon-subtab-label{
+  flex:0 0 auto;border-radius:999px;padding:9px 14px;
+  background:#edf0f4;color:#374151;font-weight:800;font-size:13px;
+  cursor:pointer;user-select:none;
+}
+.instatoon-subpanel{display:none}
+#subtab-cuts:checked ~ .instatoon-subtab-menu label[for="subtab-cuts"],
+#subtab-queue:checked ~ .instatoon-subtab-menu label[for="subtab-queue"],
+#subtab-director:checked ~ .instatoon-subtab-menu label[for="subtab-director"],
+#subtab-presets:checked ~ .instatoon-subtab-menu label[for="subtab-presets"],
+#subtab-studio:checked ~ .instatoon-subtab-menu label[for="subtab-studio"],
+#subtab-voice:checked ~ .instatoon-subtab-menu label[for="subtab-voice"],
+#subtab-reels:checked ~ .instatoon-subtab-menu label[for="subtab-reels"],
+#subtab-voicereels:checked ~ .instatoon-subtab-menu label[for="subtab-voicereels"],
+#subtab-final:checked ~ .instatoon-subtab-menu label[for="subtab-final"],
+#subtab-zip:checked ~ .instatoon-subtab-menu label[for="subtab-zip"]{
+  background:var(--brand);color:#fff;
+}
+#subtab-cuts:checked ~ .instatoon-subpanel[data-subpanel="cuts"],
+#subtab-queue:checked ~ .instatoon-subpanel[data-subpanel="queue"],
+#subtab-director:checked ~ .instatoon-subpanel[data-subpanel="director"],
+#subtab-presets:checked ~ .instatoon-subpanel[data-subpanel="presets"],
+#subtab-studio:checked ~ .instatoon-subpanel[data-subpanel="studio"],
+#subtab-voice:checked ~ .instatoon-subpanel[data-subpanel="voice"],
+#subtab-reels:checked ~ .instatoon-subpanel[data-subpanel="reels"],
+#subtab-voicereels:checked ~ .instatoon-subpanel[data-subpanel="voicereels"],
+#subtab-final:checked ~ .instatoon-subpanel[data-subpanel="final"],
+#subtab-zip:checked ~ .instatoon-subpanel[data-subpanel="zip"]{
+  display:block;
+}
+.cut-menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-top:14px}
+.cut-menu-item{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:14px;padding:8px;background:#fff;transition:transform .12s ease,box-shadow .12s ease}
+.cut-menu-item:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.cut-menu-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;display:block}
+.cut-menu-empty{width:100%;aspect-ratio:1/1;border-radius:10px;background:#f2f2f2;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999;text-align:center}
+.cut-menu-label{font-weight:800;font-size:12px}
+.instatoon-card{scroll-margin-top:90px}
+</style>
+
+<div class="css-tabs-shell">
+  <input class="css-tab-input" type="radio" name="content-tab" id="tab-blog" checked>
+  <input class="css-tab-input" type="radio" name="content-tab" id="tab-sns">
+  <input class="css-tab-input" type="radio" name="content-tab" id="tab-instatoon">
+  <input class="css-tab-input" type="radio" name="content-tab" id="tab-seo">
+  <input class="css-tab-input" type="radio" name="content-tab" id="tab-publish">
+
+  <div class="content-tabs">
+    <label class="content-tab-label" for="tab-blog">📝 블로그</label>
+    <label class="content-tab-label" for="tab-sns">📱 SNS</label>
+    <label class="content-tab-label" for="tab-instatoon">🎨 인스타툰</label>
+    <label class="content-tab-label" for="tab-seo">📊 SEO·썸네일</label>
+    <label class="content-tab-label" for="tab-publish">🚀 발행·수익화</label>
+  </div>
+
+  <div class="css-tab-panels">
+
+<div class="css-tab-panel" data-panel="blog">
+<div class="card">
+  <a href="{{ url_for('home') }}">← 홈으로</a>
+  <h1 style="margin-top:14px">글 확인 및 수정 <span class="status">V33 ULTIMATE</span></h1>
+
+  <form method="post">
+    <label>제목</label>
+    <input name="title" value="{{ a.title }}" required>
+
+    <label>메타 설명</label>
+    <textarea name="meta_description" style="min-height:90px">{{ a.meta_description }}</textarea>
+
+    <label>태그 <span class="small">쉼표로 구분</span></label>
+    <input name="tags" value="{{ a.tags }}">
+
+    <div class="article-preview-header" style="margin-top:24px">
+      <div>
+        <label style="margin-top:0">📝 블로그 글 미리보기</label>
+        <p class="small" style="margin:4px 0 0">
+          실제 발행될 글의 모습을 먼저 확인하세요.
+        </p>
+      </div>
+
+      <button
+        class="btn gray"
+        type="button"
+        onclick="updateArticlePreview()"
+      >
+        미리보기 새로고침
+      </button>
+    </div>
+
+    <div
+      id="article_live_preview"
+      class="preview article-live-preview"
+    >
+      {{ a.body_html|safe }}
+    </div>
+
+    <details class="html-editor-details">
+      <summary>✏️ HTML 직접 편집하기</summary>
+
+      <div class="html-editor-inner">
+        <p class="notice">
+          일반적으로는 위 미리보기만 확인하면 됩니다.
+          HTML을 직접 수정할 때만 이 영역을 열어주세요.
+        </p>
+
+        <textarea
+          id="body_html_editor"
+          name="body_html"
+          style="min-height:430px"
+          oninput="updateArticlePreview()"
+        >{{ a.body_html }}</textarea>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button class="btn" type="submit">
+        수정 내용 저장·SEO 재분석
+      </button>
+    </div>
+  </form>
+</div>
+
+<section class="card">
+  <h2>AI 콘텐츠 파이프라인</h2>
+  <p class="small">
+    한 번의 실행으로 SEO 재분석, 썸네일, 인스타, Threads, 쇼츠 대본까지 준비합니다.
+  </p>
+
+  <div class="progress">
+    <span style="width:{{ progress }}%"></span>
+  </div>
+
+  <p><strong>{{ progress }}%</strong> 준비 완료</p>
+
+  <div class="pipeline-grid">
+    <div class="pipeline-step"><strong>블로그 본문</strong><div class="small">{{ '완료' if a.body_html else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>SEO 분석</strong><div class="small">{{ '완료' if a.seo_score else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>썸네일</strong><div class="small">{{ '완료' if a.thumbnail_path else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>인스타</strong><div class="small">{{ '완료' if a.instagram_caption else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>Threads</strong><div class="small">{{ '완료' if a.threads_text else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>유튜브</strong><div class="small">{{ '완료' if a.youtube_title else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>틱톡</strong><div class="small">{{ '완료' if a.tiktok_caption else '대기' }}</div></div>
+    <div class="pipeline-step"><strong>쇼츠 대본</strong><div class="small">{{ '완료' if a.shorts_script else '대기' }}</div></div>
+  </div>
+
+  <form method="post" action="{{ url_for('run_pipeline', article_id=a.id) }}">
+    <label>썸네일 분위기</label>
+    <select name="thumbnail_style">
+      <option>따뜻한 생활 사진</option>
+      <option>깔끔한 매거진</option>
+      <option>밝은 일러스트</option>
+      <option>전문적인 인포그래픽</option>
+    </select>
+
+    <div class="actions">
+      <button class="btn" type="submit">전체 파이프라인 실행</button>
+    </div>
+  </form>
+
+  <p class="notice">
+    이미 만들어진 결과도 새 내용으로 다시 생성됩니다.
+    AI 이미지 생성 비용이 발생할 수 있습니다.
+  </p>
+</section>
+</div>
+
+<div class="css-tab-panel" data-panel="sns">
+<section class="card">
+  <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+    <div>
+      <h2>콘텐츠 패키지</h2>
+      <p class="small">
+        인스타그램, Threads, 릴스·쇼츠 콘텐츠를 확인하고 바로 복사하세요.
+      </p>
+    </div>
+
+    <form method="post" action="{{ url_for('generate_social_route', article_id=a.id) }}">
+      <button class="btn" type="submit">SNS 콘텐츠 다시 생성</button>
+    </form>
+  </div>
+
+  <div class="grid" style="margin-top:18px">
+    <article class="idea-card" style="margin:0">
+      <span class="tag">Instagram</span>
+      <h3>인스타그램 캡션</h3>
+
+      {% if a.instagram_caption %}
+        <textarea id="instagram_text" readonly style="min-height:260px">{{ a.instagram_caption }}</textarea>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('instagram_text', this)"
+        >
+          인스타 캡션 복사
+        </button>
+      {% else %}
+        <p class="small">아직 생성된 인스타그램 캡션이 없습니다.</p>
+      {% endif %}
+    </article>
+
+    <article class="idea-card" style="margin:0">
+      <span class="tag">Threads</span>
+      <h3>Threads 게시물</h3>
+
+      {% if a.threads_text %}
+        <textarea id="threads_text" readonly style="min-height:260px">{{ a.threads_text }}</textarea>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('threads_text', this)"
+        >
+          Threads 글 복사
+        </button>
+      {% else %}
+        <p class="small">아직 생성된 Threads 글이 없습니다.</p>
+      {% endif %}
+    </article>
+
+    <article class="idea-card" style="margin:0">
+      <span class="tag">YouTube</span>
+      <h3>유튜브 제목·설명</h3>
+
+      {% if a.youtube_title %}
+        <label class="small" style="margin-top:0">제목</label>
+        <textarea id="youtube_title_text" readonly style="min-height:60px">{{ a.youtube_title }}</textarea>
+        <label class="small">설명</label>
+        <textarea id="youtube_desc_text" readonly style="min-height:180px">{{ a.youtube_description }}</textarea>
+        <label class="small">태그</label>
+        <textarea id="youtube_tags_text" readonly style="min-height:60px">{{ a.youtube_tags }}</textarea>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('youtube_title_text', this)"
+        >
+          제목 복사
+        </button>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('youtube_desc_text', this)"
+        >
+          설명 복사
+        </button>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('youtube_tags_text', this)"
+        >
+          태그 복사
+        </button>
+      {% else %}
+        <p class="small">아직 생성된 유튜브 콘텐츠가 없습니다.</p>
+      {% endif %}
+    </article>
+
+    <article class="idea-card" style="margin:0">
+      <span class="tag">TikTok</span>
+      <h3>틱톡 캡션</h3>
+
+      {% if a.tiktok_caption %}
+        <textarea id="tiktok_text" readonly style="min-height:180px">{{ a.tiktok_caption }}</textarea>
+        <button
+          class="btn copy-btn"
+          type="button"
+          onclick="copyText('tiktok_text', this)"
+        >
+          틱톡 캡션 복사
+        </button>
+      {% else %}
+        <p class="small">아직 생성된 틱톡 캡션이 없습니다.</p>
+      {% endif %}
+    </article>
+  </div>
+
+  <article class="idea-card" style="margin-top:14px">
+    <span class="tag">Reels · Shorts</span>
+    <h3>릴스·쇼츠 대본</h3>
+
+    {% if a.shorts_script %}
+      <textarea id="shorts_text" readonly style="min-height:360px">{{ a.shorts_script }}</textarea>
+      <button
+        class="btn copy-btn"
+        type="button"
+        onclick="copyText('shorts_text', this)"
+      >
+        릴스·쇼츠 대본 복사
+      </button>
+    {% else %}
+      <p class="small">아직 생성된 릴스·쇼츠 대본이 없습니다.</p>
+    {% endif %}
+  </article>
+</section>
+</div>
+
+<div class="css-tab-panel" data-panel="instatoon">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-cuts" checked>
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-queue">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-director">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-presets">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-studio">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-voice">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-reels">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-voicereels">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-final">
+  <input class="instatoon-subtab-input" type="radio" name="instatoon-subtab" id="subtab-zip">
+  <div class="instatoon-subtab-menu">
+    <label class="instatoon-subtab-label" for="subtab-cuts">🎨 8컷 보기</label>
+    <label class="instatoon-subtab-label" for="subtab-queue">⚡ 원클릭 제작</label>
+    <label class="instatoon-subtab-label" for="subtab-director">🎬 연출 감독</label>
+    <label class="instatoon-subtab-label" for="subtab-presets">🧬 캐릭터 프리셋</label>
+    <label class="instatoon-subtab-label" for="subtab-studio">👩‍👧 캐릭터 스튜디오</label>
+    <label class="instatoon-subtab-label" for="subtab-voice">🎙️ 음성 스튜디오</label>
+    <label class="instatoon-subtab-label" for="subtab-reels">🎬 릴스 제작</label>
+    <label class="instatoon-subtab-label" for="subtab-voicereels">🔊 음성 릴스</label>
+    <label class="instatoon-subtab-label" for="subtab-final">🎵 최종 마스터링</label>
+    <label class="instatoon-subtab-label" for="subtab-zip">📦 ZIP 패키지</label>
+  </div>
+
+<div class="instatoon-subpanel" data-subpanel="cuts">
+{% if instatoon_cuts %}
+<section class="card" id="cut_menu">
+  <h2 style="margin-top:0">🖼️ 8컷 바로가기</h2>
+  <p class="small">누르면 스크롤 없이 바로 그 컷으로 이동해요.</p>
+  <div class="cut-menu-grid">
+    {% for cut in instatoon_cuts %}
+      {% if cut.strip() %}
+        {% set thumb = instatoon_captioned_images.get(loop.index|string) or instatoon_images.get(loop.index|string) %}
+        <a class="cut-menu-item" href="#cut_block_{{ loop.index }}">
+          {% if thumb %}
+            <img src="{{ url_for('media', filename=thumb) }}" alt="{{ loop.index }}컷 미리보기" loading="lazy">
+          {% else %}
+            <span class="cut-menu-empty">이미지 없음</span>
+          {% endif %}
+          <span class="cut-menu-label">CUT {{ loop.index }}</span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+</section>
+{% endif %}
+
+  {% if instatoon_cuts %}
+<div class="instatoon-subpanel" data-subpanel="queue">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>⚡ 원클릭 콘텐츠 제작 큐</h2>
+        <p class="small">
+          이미지 8컷부터 음성·릴스·ZIP까지 긴 작업을 한 단계씩 순서대로 실행해 타임아웃을 줄입니다.
+        </p>
+      </div>
+
+      <span
+        id="production_queue_badge"
+        class="status {{ 'off' if not production_queue_state else '' }}"
+      >
+        {{ production_queue_state.get('message', '대기 중') }}
+      </span>
+    </div>
+
+    <div class="pipeline-grid" id="production_queue_steps">
+      <div class="pipeline-step" data-queue-step="images">
+        <strong>1. 이미지 8컷</strong>
+        <div class="small">
+          현재 {{ production_queue_snapshot.get('images', 0) }}/8
+        </div>
+      </div>
+
+      <div class="pipeline-step" data-queue-step="audio">
+        <strong>2. 음성 8컷</strong>
+        <div class="small">
+          현재 {{ production_queue_snapshot.get('audio', 0) }}/8
+        </div>
+      </div>
+
+      <div class="pipeline-step" data-queue-step="reels">
+        <strong>3. 기본 릴스</strong>
+        <div class="small">
+          {{ '완료' if production_queue_snapshot.get('reels') else '대기' }}
+        </div>
+      </div>
+
+      <div class="pipeline-step" data-queue-step="reels_voice">
+        <strong>4. 음성 릴스</strong>
+        <div class="small">
+          {{ '완료' if production_queue_snapshot.get('reels_voice') else '대기' }}
+        </div>
+      </div>
+
+      <div class="pipeline-step" data-queue-step="reels_final">
+        <strong>5. BGM 최종본</strong>
+        <div class="small">
+          {% if production_queue_snapshot.get('reels_final') %}
+            완료
+          {% elif production_queue_snapshot.get('bgm') %}
+            대기
+          {% else %}
+            BGM 없음 · 자동 건너뜀
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="pipeline-step" data-queue-step="zip">
+        <strong>6. 전체 ZIP</strong>
+        <div class="small">
+          {{ '완료' if production_queue_snapshot.get('zip') else '대기' }}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:18px">
+      <div>
+        <h3>제작 범위</h3>
+
+        <label class="toggle">
+          <input
+            id="queue_make_images"
+            type="checkbox"
+            checked
+          >
+          이미지 8컷 생성
+        </label>
+
+        <label class="toggle">
+          <input
+            id="queue_make_audio"
+            type="checkbox"
+            checked
+          >
+          엄마·딸·나레이션 음성 생성
+        </label>
+
+        <label class="toggle">
+          <input
+            id="queue_make_reels"
+            type="checkbox"
+            checked
+          >
+          기본 릴스와 음성 릴스 생성
+        </label>
+
+        <label class="toggle">
+          <input
+            id="queue_make_final"
+            type="checkbox"
+            checked
+          >
+          BGM이 있으면 최종 릴스 생성
+        </label>
+
+        <label class="toggle">
+          <input
+            id="queue_make_zip"
+            type="checkbox"
+            checked
+          >
+          마지막에 전체 ZIP 생성
+        </label>
+      </div>
+
+      <div>
+        <h3>공통 설정</h3>
+
+        <label>컷당 영상 시간</label>
+        <select id="queue_seconds_per_cut">
+          <option value="2.5">2.5초</option>
+          <option value="3" selected>3초</option>
+          <option value="4">4초</option>
+          <option value="5">5초</option>
+        </select>
+
+        <label>영상 움직임</label>
+        <select id="queue_motion_style">
+          <option value="다양한 움직임" selected>다양한 움직임</option><option value="교차 줌">교차 줌</option><option value="왼쪽→오른쪽">좌→우</option><option value="오른쪽→왼쪽">우→좌</option><option value="위→아래">위→아래</option><option value="아래→위">아래→위</option><option value="대각선 이동">대각선</option><option value="부드러운 흔들림">부드러운 흔들림</option><option value="고정">고정 화면</option>
+        </select>
+
+        <label>음성 볼륨</label>
+        <select id="queue_voice_volume">
+          <option value="0.8">조금 작게</option>
+          <option value="1.0" selected>기본</option>
+          <option value="1.2">조금 크게</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button
+        id="production_queue_start_btn"
+        class="btn green"
+        type="button"
+        onclick="startProductionQueue()"
+      >
+        ⚡ 전체 제작 시작
+      </button>
+
+      <button
+        id="production_queue_stop_btn"
+        class="btn red"
+        type="button"
+        onclick="stopProductionQueue()"
+        disabled
+      >
+        중지
+      </button>
+
+      <form
+        method="post"
+        action="{{ url_for('reset_production_queue', article_id=a.id) }}"
+        style="margin:0"
+      >
+        <button class="btn gray" type="submit">
+          진행 기록 초기화
+        </button>
+      </form>
+    </div>
+
+    <div
+      id="production_queue_progress"
+      style="
+        margin-top:16px;
+        padding:14px;
+        border-radius:12px;
+        background:#f7f8fc;
+        font-weight:700;
+        white-space:pre-wrap;
+      "
+    >
+      대기 중
+    </div>
+
+    <p class="notice">
+      브라우저 창을 닫으면 다음 단계 실행은 멈춥니다.
+      이미 완료된 파일은 서버에 저장되므로 다시 시작해도 됩니다.
+    </p>
+</div>
+  </section>
+<div class="instatoon-subpanel" data-subpanel="director">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🎬 AI 연출 감독</h2>
+        <p class="small">
+          8컷의 훅, 감정선, 구도 변화, 반전과 CTA를 분석하고 연재용 수정안을 만듭니다.
+        </p>
+      </div>
+
+      {% if a.director_revised_instatoon %}
+        <span class="status">수정안 준비됨</span>
+      {% else %}
+        <span class="status off">분석 전</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <form
+          method="post"
+          action="{{ url_for('analyze_instatoon_direction', article_id=a.id) }}"
+          onsubmit="
+            const button=this.querySelector('button[type=submit]');
+            if(button){
+              button.disabled=true;
+              button.innerText='⏳ 연출 분석 중...';
+            }
+          "
+        >
+          <label>연출 톤</label>
+          <select name="director_tone">
+            <option value="공감형">공감형 · 육아 현실</option>
+            <option value="코믹형">코믹형 · 반응과 반전 강조</option>
+            <option value="감동형">감동형 · 감정선 강조</option>
+            <option value="정보형">정보형 · 이해와 실용성 강조</option>
+            <option value="판매연결형">판매 연결형 · 자연스러운 제품 노출</option>
+          </select>
+
+          <label>수정 강도</label>
+          <select name="director_intensity">
+            <option value="약하게">약하게 · 문장과 구도만 정리</option>
+            <option value="보통" selected>보통 · 훅과 감정선 개선</option>
+            <option value="강하게">강하게 · 적극 재구성</option>
+          </select>
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              {{ '🎬 다시 분석하기' if a.director_revised_instatoon else '🎬 8컷 연출 분석' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          분석은 이미지가 아니라 현재 8컷 대본을 기준으로 진행합니다.
+          수정안을 적용한 뒤 이미지를 다시 생성해야 새 연출이 반영됩니다.
+        </p>
+      </div>
+
+      <div>
+        {% if director_report %}
+          <div class="score">
+            {{ director_report.get('score', 0) }}
+            <span class="small"> / 100</span>
+          </div>
+
+          <p>{{ director_report.get('summary', '') }}</p>
+
+          {% if director_report.get('strengths') %}
+            <h3>잘된 점</h3>
+            <ul>
+              {% for item in director_report.get('strengths', []) %}
+                <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          {% if director_report.get('problems') %}
+            <h3>보완할 점</h3>
+            <ul>
+              {% for item in director_report.get('problems', []) %}
+                <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% else %}
+          <div class="notice">
+            분석을 실행하면 점수와 연출 개선 포인트가 여기에 표시됩니다.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if director_report.get('directing_notes') %}
+      <h3>컷별 연출 노트</h3>
+
+      <div class="instatoon-grid">
+        {% for note in director_report.get('directing_notes', []) %}
+          <article class="instatoon-card">
+            <span class="instatoon-number">
+              CUT {{ note.get('cut_number', loop.index) }}
+            </span>
+
+            <p>
+              <strong>문제</strong><br>
+              {{ note.get('problem', '') }}
+            </p>
+
+            <p>
+              <strong>수정 방향</strong><br>
+              {{ note.get('direction', '') }}
+            </p>
+
+            <div class="small">
+              구도: {{ note.get('camera', '') }}<br>
+              감정: {{ note.get('emotion', '') }}
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if a.director_revised_instatoon %}
+      <h3>AI 연출 수정안</h3>
+
+      <textarea
+        readonly
+        style="min-height:420px"
+      >{{ a.director_revised_instatoon }}</textarea>
+
+      <div class="actions">
+        <form
+          method="post"
+          action="{{ url_for('apply_instatoon_direction', article_id=a.id) }}"
+          onsubmit="return confirm('이 수정안을 현재 8컷에 적용할까요?')"
+          style="margin:0"
+        >
+          <label class="toggle" style="margin-bottom:12px">
+            <input
+              type="checkbox"
+              name="clear_generated_assets"
+              value="1"
+              checked
+            >
+            기존 컷 이미지·음성·릴스·ZIP 삭제
+          </label>
+
+          <button class="btn green" type="submit">
+            수정안 적용
+          </button>
+        </form>
+
+        <form
+          method="post"
+          action="{{ url_for('delete_instatoon_direction', article_id=a.id) }}"
+          onsubmit="return confirm('연출 분석 결과와 수정안을 삭제할까요?')"
+          style="margin:0"
+        >
+          <button class="btn red" type="submit">
+            분석 결과 삭제
+          </button>
+        </form>
+      </div>
+
+      <p class="notice">
+        기존 결과 삭제를 선택하면 캐릭터 설정과 참조 이미지는 유지되고,
+        컷 이미지·음성·영상만 초기화됩니다.
+      </p>
+    {% endif %}
+</div>
+  </section>
+<div class="instatoon-subpanel" data-subpanel="presets">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🧬 캐릭터·세계관 프리셋</h2>
+        <p class="small">
+          현재 엄마·딸 외형, 화풍, 집 분위기, 자막 설정과 참조 이미지를 저장해 다른 글에서도 재사용합니다.
+        </p>
+      </div>
+
+      {% if instatoon_presets %}
+        <span class="status">{{ instatoon_presets|length }}개 저장됨</span>
+      {% else %}
+        <span class="status off">저장된 프리셋 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <h3>현재 설정을 프리셋으로 저장</h3>
+
+        <form
+          method="post"
+          action="{{ url_for('save_instatoon_preset', article_id=a.id) }}"
+        >
+          <label>프리셋 이름</label>
+          <input
+            name="preset_name"
+            placeholder="예: 말썽쟁이 딸랑구 기본형"
+            required
+          >
+
+          <label>설명</label>
+          <textarea
+            name="preset_description"
+            style="min-height:90px"
+            placeholder="예: 주황색 니트 엄마와 노란 옷 딸, 따뜻한 베이지 집"
+          ></textarea>
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              현재 설정 저장
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          같은 이름으로 다시 저장하면 기존 프리셋이 최신 설정으로 업데이트됩니다.
+        </p>
+      </div>
+
+      <div>
+        <h3>저장된 프리셋</h3>
+
+        {% if instatoon_presets %}
+          <div style="display:grid;gap:12px">
+            {% for preset in instatoon_presets %}
+              <article
+                style="
+                  border:1px solid #e5e7eb;
+                  border-radius:14px;
+                  padding:14px;
+                  background:#fff;
+                "
+              >
+                <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+                  <div>
+                    <strong>{{ preset.name }}</strong>
+
+                    {% if preset.description %}
+                      <div class="small" style="margin-top:5px">
+                        {{ preset.description }}
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  {% if preset.reference_image or preset.character_sheet %}
+                    <span class="status">이미지 포함</span>
+                  {% else %}
+                    <span class="status off">설정만 저장</span>
+                  {% endif %}
+                </div>
+
+                <div class="actions">
+                  <form
+                    method="post"
+                    action="{{ url_for(
+                        'apply_instatoon_preset',
+                        article_id=a.id,
+                        preset_id=preset.id
+                    ) }}"
+                    style="margin:0"
+                  >
+                    <button class="btn" type="submit">
+                      이 프리셋 적용
+                    </button>
+                  </form>
+
+                  <form
+                    method="post"
+                    action="{{ url_for(
+                        'delete_instatoon_preset',
+                        article_id=a.id,
+                        preset_id=preset.id
+                    ) }}"
+                    onsubmit="return confirm('이 프리셋을 삭제할까요?')"
+                    style="margin:0"
+                  >
+                    <button class="btn red" type="submit">
+                      삭제
+                    </button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="notice">
+            캐릭터 설정을 다듬은 뒤 첫 프리셋을 저장해 보세요.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+</div>
+  </section>
+<div class="instatoon-subpanel" data-subpanel="studio">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>👩‍👧 캐릭터 스튜디오</h2>
+        <p class="small">
+          엄마와 딸의 외형·옷·화풍을 고정해 모든 컷에 같은 설정을 사용합니다.
+        </p>
+      </div>
+
+      {% if a.instatoon_character_sheet %}
+        <span class="status">캐릭터 시트 있음</span>
+      {% else %}
+        <span class="status off">캐릭터 시트 없음</span>
+      {% endif %}
+    </div>
+
+    <form
+      method="post"
+      action="{{ url_for('save_instatoon_character_profile', article_id=a.id) }}"
+    >
+      <div class="grid">
+        <div>
+          <label>프로젝트 이름</label>
+          <input
+            name="project_name"
+            value="{{ instatoon_character_profile.get('project_name', '') }}"
+            placeholder="예: 말썽쟁이 딸랑구"
+          >
+        </div>
+
+        <div>
+          <label>기본 화풍</label>
+          <input
+            name="art_style"
+            value="{{ instatoon_character_profile.get('art_style', '') }}"
+            placeholder="예: 따뜻한 한국 웹툰, 파스텔 색감"
+          >
+        </div>
+
+        <div>
+          <label>엄마 이름</label>
+          <input
+            name="mother_name"
+            value="{{ instatoon_character_profile.get('mother_name', '') }}"
+          >
+        </div>
+
+        <div>
+          <label>딸 이름</label>
+          <input
+            name="daughter_name"
+            value="{{ instatoon_character_profile.get('daughter_name', '') }}"
+          >
+        </div>
+      </div>
+
+      <label>엄마 외형 고정 설정</label>
+      <textarea
+        name="mother_appearance"
+        style="min-height:110px"
+      >{{ instatoon_character_profile.get('mother_appearance', '') }}</textarea>
+
+      <label>딸 외형 고정 설정</label>
+      <textarea
+        name="daughter_appearance"
+        style="min-height:110px"
+      >{{ instatoon_character_profile.get('daughter_appearance', '') }}</textarea>
+
+      <label>배경·공간 분위기</label>
+      <textarea
+        name="location_style"
+        style="min-height:90px"
+      >{{ instatoon_character_profile.get('location_style', '') }}</textarea>
+
+      <label>업로드 이미지 우선순위</label>
+      <select name="reference_priority">
+        <option value="업로드 이미지 최우선" selected>업로드 이미지 최우선 · 동물/인물/의상 그대로</option>
+        <option value="캐릭터 설정과 혼합">업로드 이미지와 글 설정 혼합</option>
+      </select>
+
+      <label>금지 요소</label>
+      <textarea
+        name="negative_rules"
+        style="min-height:90px"
+      >{{ instatoon_character_profile.get('negative_rules', '') }}</textarea>
+
+      <h3>한글 대사·자막 디자인</h3>
+      <div class="grid">
+        <div>
+          <label>글씨 배치</label>
+          <select name="caption_style">
+            <option
+              value="말풍선+하단자막"
+              {{ 'selected' if instatoon_character_profile.get('caption_style') == '말풍선+하단자막' else '' }}
+            >
+              상단 대사 + 하단 자막
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label>대사 글씨 크기</label>
+          <input
+            type="number"
+            name="caption_font_size"
+            min="24"
+            max="72"
+            value="{{ instatoon_character_profile.get('caption_font_size', '64') }}"
+          >
+        </div>
+
+        <div>
+          <label>하단 자막 크기</label>
+          <input
+            type="number"
+            name="subtitle_font_size"
+            min="28"
+            max="82"
+            value="{{ instatoon_character_profile.get('subtitle_font_size', '68') }}"
+          >
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit">
+          캐릭터 설정 저장
+        </button>
+      </div>
+    </form>
+
+
+    <section
+      style="
+        margin-top:20px;
+        padding:18px;
+        border:1px solid #e5e7eb;
+        border-radius:16px;
+        background:#fafafa;
+      "
+    >
+      <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+        <div>
+          <h3 style="margin-top:0">📷 내 이미지로 웹툰 만들기</h3>
+          <p class="small">
+            업로드한 이미지 속 인물·동물·의상·색감을 기준 캐릭터로 사용합니다. 여우와 곰을 올리면 여우와 곰으로 8컷을 만듭니다.
+          </p>
+        </div>
+
+        {% if a.instatoon_reference_image %}
+          <span class="status">참조 이미지 사용 중</span>
+        {% else %}
+          <span class="status off">참조 이미지 없음</span>
+        {% endif %}
+      </div>
+
+      <div class="grid">
+        <div>
+          {% if a.instatoon_reference_image %}
+            <img
+              src="{{ url_for('media', filename=a.instatoon_reference_image) }}"
+              alt="업로드한 웹툰 참조 이미지"
+              style="
+                display:block;
+                width:100%;
+                max-height:420px;
+                object-fit:contain;
+                border-radius:14px;
+                border:1px solid #e5e7eb;
+                background:#fff;
+              "
+            >
+          {% else %}
+            <div
+              class="notice"
+              style="
+                min-height:220px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                text-align:center;
+              "
+            >
+              아직 업로드된 이미지가 없습니다.<br>
+              정면 얼굴이 잘 보이는 선명한 사진이나 캐릭터 이미지를 추천해요.
+            </div>
+          {% endif %}
+        </div>
+
+        <div>
+          <form
+            method="post"
+            action="{{ url_for('upload_instatoon_reference_image', article_id=a.id) }}"
+            enctype="multipart/form-data"
+          >
+            <label>참조 이미지 선택</label>
+            <input
+              type="file"
+              name="reference_image"
+              accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+              required
+            >
+
+            <p class="notice">
+              PNG·JPG·WEBP, 최대 10MB. 한 사람 또는 한 캐릭터가 크게 보이는 이미지를 사용하면 결과가 더 안정적입니다.
+            </p>
+
+            <div class="actions">
+              <button class="btn green" type="submit">
+                {{ '참조 이미지 바꾸기' if a.instatoon_reference_image else '참조 이미지 업로드' }}
+              </button>
+            </div>
+          </form>
+
+          {% if a.instatoon_reference_image %}
+            <form
+              method="post"
+              action="{{ url_for('delete_instatoon_reference_image', article_id=a.id) }}"
+              onsubmit="return confirm('참조 이미지를 삭제할까요?')"
+            >
+              <div class="actions">
+                <button class="btn red" type="submit">
+                  참조 이미지 삭제
+                </button>
+              </div>
+            </form>
+          {% endif %}
+
+          <p class="small">
+            업로드한 이미지는 그림체 변환용 참조로만 사용됩니다. 결과는 원본과 완전히 같지 않을 수 있으며, 컷마다 약간의 차이가 생길 수 있습니다.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid" style="margin-top:18px">
+      <div>
+        <h3>캐릭터 시트</h3>
+
+        {% if a.instatoon_character_sheet %}
+          <img
+            src="{{ url_for('media', filename=a.instatoon_character_sheet) }}"
+            alt="인스타툰 캐릭터 시트"
+            style="display:block;width:100%;border-radius:14px;border:1px solid #e5e7eb"
+          >
+
+          <div class="actions">
+            <a
+              class="btn gray"
+              href="{{ url_for('media', filename=a.instatoon_character_sheet) }}"
+              target="_blank"
+              download
+            >
+              캐릭터 시트 다운로드
+            </a>
+          </div>
+        {% else %}
+          <p class="notice">
+            캐릭터 설정을 저장한 뒤 시트를 만들면 엄마·딸의 기준 외형을 한눈에 확인할 수 있어요.
+          </p>
+        {% endif %}
+      </div>
+
+      <div>
+        <h3>시트 생성</h3>
+
+        <form
+          method="post"
+          action="{{ url_for('generate_instatoon_character_sheet_route', article_id=a.id) }}"
+        >
+          <label>캐릭터 시트 화풍</label>
+          <input
+            name="character_sheet_style"
+            value="{{ instatoon_character_profile.get('art_style', '') }}"
+          >
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              {{ '캐릭터 시트 다시 만들기' if a.instatoon_character_sheet else '캐릭터 시트 만들기' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          참조 이미지가 있으면 캐릭터 시트도 업로드한 이미지 속 캐릭터를 기준으로 만듭니다.
+        </p>
+      </div>
+    </div>
+</div>
+  </section>
+
+
+<div class="instatoon-subpanel" data-subpanel="voice">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🎙️ 인스타툰 음성 스튜디오</h2>
+        <p class="small">
+          컷별 대사에서 엄마·딸·나레이션을 분리해 각각 다른 목소리로 생성합니다.
+        </p>
+      </div>
+
+      {% if instatoon_audio %}
+        <span class="status">음성 있음</span>
+      {% else %}
+        <span class="status off">음성 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <label>엄마 목소리 연기</label>
+        <input
+          id="mother_mood"
+          value="{{ instatoon_audio_settings.get('mother_mood', '따뜻하고 자연스럽게') }}"
+          placeholder="예: 걱정되지만 다정하게"
+        >
+      </div>
+
+      <div>
+        <label>딸 목소리 연기</label>
+        <input
+          id="daughter_mood"
+          value="{{ instatoon_audio_settings.get('daughter_mood', '밝고 장난스럽게') }}"
+          placeholder="예: 신나고 호기심 많게"
+        >
+      </div>
+
+      <div>
+        <label>나레이션 연기</label>
+        <input
+          id="narration_mood"
+          value="{{ instatoon_audio_settings.get('narration_mood', '편안하게 이야기하듯') }}"
+          placeholder="예: 따뜻한 동화책처럼"
+        >
+      </div>
+
+      <div>
+        <label>음성 모델</label>
+        <input value="gpt-4o-mini-tts" readonly>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button
+        id="generate_all_audio_btn"
+        class="btn green"
+        type="button"
+        onclick="generateAllCutAudio()"
+      >
+        🎙️ 8컷 음성 순차 생성
+      </button>
+
+      {% if instatoon_audio %}
+        <form
+          method="post"
+          action="{{ url_for('delete_instatoon_audio', article_id=a.id) }}"
+          onsubmit="return confirm('생성된 인스타툰 음성을 모두 삭제할까요?')"
+          style="margin:0"
+        >
+          <button class="btn red" type="submit">
+            음성 전체 삭제
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div
+      id="audio_generation_progress"
+      class="small"
+      style="margin-top:12px;font-weight:700"
+    ></div>
+
+    <p class="notice">
+      AI로 생성된 음성임을 시청자에게 명확히 안내하는 것이 좋습니다.
+      이번 단계에서는 음성을 따로 생성하고 미리 듣습니다.
+      다음 단계에서 릴스 영상에 자동 배치합니다.
+    </p>
+</div>
+  </section>
+<div class="instatoon-subpanel" data-subpanel="reels">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🎬 릴스 자동 제작</h2>
+        <p class="small">
+          한글이 합성된 인스타툰 이미지를 세로형 1080×1920 MP4로 자동 연결합니다.
+        </p>
+      </div>
+
+      {% if a.reels_path %}
+        <span class="status">영상 완성</span>
+      {% else %}
+        <span class="status off">영상 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <form
+          method="post"
+          action="{{ url_for('create_reels_video', article_id=a.id) }}"
+          onsubmit="
+            const button=this.querySelector('button[type=submit]');
+            if(button){
+              button.disabled=true;
+              button.innerText='⏳ 릴스 만드는 중...';
+            }
+          "
+        >
+          <label>컷당 재생 시간</label>
+          <select name="seconds_per_cut">
+            <option value="2.5">2.5초 · 빠른 템포</option>
+            <option value="3" selected>3초 · 기본</option>
+            <option value="4">4초 · 천천히</option>
+            <option value="5">5초 · 여유 있게</option>
+          </select>
+
+          <label>영상 움직임</label>
+          <select name="motion_style">
+            <option value="다양한 움직임" selected>다양한 움직임 · 컷마다 자동</option>
+            <option value="교차 줌">교차 줌인·줌아웃</option><option value="줌인">줌인</option><option value="줌아웃">줌아웃</option><option value="왼쪽→오른쪽">왼쪽→오른쪽</option><option value="오른쪽→왼쪽">오른쪽→왼쪽</option><option value="위→아래">위→아래</option><option value="아래→위">아래→위</option><option value="대각선 이동">대각선 이동</option><option value="부드러운 흔들림">부드러운 흔들림</option><option value="고정">고정 화면</option>
+          </select>
+
+          <div class="grid">
+            <div>
+              <label>프레임</label>
+              <select name="fps">
+                <option value="30" selected>30 FPS</option>
+                <option value="24">24 FPS</option>
+              </select>
+            </div>
+
+            <div>
+              <label>전환 시간</label>
+              <select name="transition_seconds">
+                <option value="0.25">0.25초</option>
+                <option value="0.35" selected>0.35초</option>
+                <option value="0.5">0.5초</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              {{ '🎬 릴스 다시 만들기' if a.reels_path else '🎬 릴스 만들기' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          영상 생성은 이미지 수와 서버 성능에 따라 잠시 걸릴 수 있습니다.
+          이 버전은 저작권 문제를 피하기 위해 BGM 없이 제작합니다.
+        </p>
+      </div>
+
+      <div>
+        {% if a.reels_path %}
+          <video
+            controls
+            playsinline
+            preload="metadata"
+            style="
+              display:block;
+              width:100%;
+              max-height:620px;
+              border-radius:16px;
+              background:#111;
+            "
+          >
+            <source
+              src="{{ url_for('media', filename=a.reels_path) }}"
+              type="video/mp4"
+            >
+          </video>
+
+          <div class="actions">
+            <a
+              class="btn green"
+              href="{{ url_for('media', filename=a.reels_path) }}"
+              download
+            >
+              MP4 다운로드
+            </a>
+
+            <form
+              method="post"
+              action="{{ url_for('delete_reels_video', article_id=a.id) }}"
+              onsubmit="return confirm('생성된 릴스 영상을 삭제할까요?')"
+              style="margin:0"
+            >
+              <button class="btn red" type="submit">
+                영상 삭제
+              </button>
+            </form>
+          </div>
+        {% else %}
+          <div
+            class="notice"
+            style="
+              min-height:280px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              text-align:center;
+            "
+          >
+            인스타툰 이미지가 준비되면<br>
+            여기서 릴스 MP4를 만들 수 있어요.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+</div>
+  </section>
+
+<div class="instatoon-subpanel" data-subpanel="voicereels">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🔊 음성 포함 릴스 완성</h2>
+        <p class="small">
+          생성된 엄마·딸·나레이션 음성을 컷 순서에 맞춰 기본 릴스 MP4에 자동 배치합니다.
+        </p>
+      </div>
+
+      {% if a.reels_voice_path %}
+        <span class="status">음성 영상 완성</span>
+      {% else %}
+        <span class="status off">음성 영상 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <form
+          method="post"
+          action="{{ url_for('create_reels_video_with_voice', article_id=a.id) }}"
+          onsubmit="
+            const button=this.querySelector('button[type=submit]');
+            if(button){
+              button.disabled=true;
+              button.innerText='⏳ 음성 합치는 중...';
+            }
+          "
+        >
+          <label>음성 볼륨</label>
+          <select name="voice_volume">
+            <option value="0.8">조금 작게</option>
+            <option value="1.0" selected>기본</option>
+            <option value="1.2">조금 크게</option>
+            <option value="1.5">크게</option>
+          </select>
+
+          <label>컷당 음성 구간</label>
+          <select name="voice_cut_duration">
+            <option value="">
+              기본 릴스의 컷 시간을 자동 사용
+            </option>
+            <option value="2.5">2.5초</option>
+            <option value="3">3초</option>
+            <option value="4">4초</option>
+            <option value="5">5초</option>
+          </select>
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              {{ '🔊 음성 포함 릴스 다시 만들기' if a.reels_voice_path else '🔊 음성 포함 릴스 만들기' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          순서: 8컷 음성 생성 → 기본 릴스 만들기 → 음성 포함 릴스 만들기.
+          한 컷의 대사가 길면 해당 컷 시간 뒤의 음성이 잘릴 수 있으므로 컷당 시간을 넉넉하게 설정하세요.
+        </p>
+      </div>
+
+      <div>
+        {% if a.reels_voice_path %}
+          <video
+            controls
+            playsinline
+            preload="metadata"
+            style="
+              display:block;
+              width:100%;
+              max-height:620px;
+              border-radius:16px;
+              background:#111;
+            "
+          >
+            <source
+              src="{{ url_for('media', filename=a.reels_voice_path) }}"
+              type="video/mp4"
+            >
+          </video>
+
+          <div class="actions">
+            <a
+              class="btn green"
+              href="{{ url_for('media', filename=a.reels_voice_path) }}"
+              download
+            >
+              음성 포함 MP4 다운로드
+            </a>
+
+            <form
+              method="post"
+              action="{{ url_for('delete_reels_video_with_voice', article_id=a.id) }}"
+              onsubmit="return confirm('음성 포함 릴스 영상을 삭제할까요?')"
+              style="margin:0"
+            >
+              <button class="btn red" type="submit">
+                음성 영상 삭제
+              </button>
+            </form>
+          </div>
+        {% else %}
+          <div
+            class="notice"
+            style="
+              min-height:280px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              text-align:center;
+            "
+          >
+            기본 릴스와 컷별 음성이 준비되면<br>
+            여기서 최종 음성 MP4를 만들 수 있어요.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+</div>
+  </section>
+
+<div class="instatoon-subpanel" data-subpanel="final">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🎵 최종 릴스 마스터링</h2>
+        <p class="small">
+          직접 보유한 BGM을 업로드해 음성과 함께 최종 MP4로 합칩니다.
+        </p>
+      </div>
+
+      {% if a.reels_final_path %}
+        <span class="status">최종본 완성</span>
+      {% elif a.reels_bgm_path %}
+        <span class="status draft">BGM 준비됨</span>
+      {% else %}
+        <span class="status off">BGM 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <h3>BGM 업로드</h3>
+
+        {% if a.reels_bgm_path %}
+          <audio
+            controls
+            preload="metadata"
+            style="width:100%;margin-bottom:12px"
+          >
+            <source src="{{ url_for('media', filename=a.reels_bgm_path) }}">
+          </audio>
+        {% endif %}
+
+        <form
+          method="post"
+          action="{{ url_for('upload_reels_bgm', article_id=a.id) }}"
+          enctype="multipart/form-data"
+        >
+          <label>내 BGM 파일</label>
+          <input
+            type="file"
+            name="bgm_file"
+            accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"
+            required
+          >
+
+          <p class="notice">
+            MP3·WAV·M4A·AAC·OGG, 최대 25MB.
+            직접 제작했거나 사용 허가를 받은 음악만 업로드하세요.
+          </p>
+
+          <div class="actions">
+            <button class="btn" type="submit">
+              {{ 'BGM 바꾸기' if a.reels_bgm_path else 'BGM 업로드' }}
+            </button>
+          </div>
+        </form>
+
+        {% if a.reels_bgm_path %}
+          <form
+            method="post"
+            action="{{ url_for('delete_reels_bgm', article_id=a.id) }}"
+            onsubmit="return confirm('BGM과 최종 릴스를 삭제할까요?')"
+          >
+            <div class="actions">
+              <button class="btn red" type="submit">
+                BGM 삭제
+              </button>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+
+      <div>
+        <h3>최종 믹싱 설정</h3>
+
+        <form
+          method="post"
+          action="{{ url_for('create_final_reels_video', article_id=a.id) }}"
+          onsubmit="
+            const button=this.querySelector('button[type=submit]');
+            if(button){
+              button.disabled=true;
+              button.innerText='⏳ 최종 영상 만드는 중...';
+            }
+          "
+        >
+          <label>BGM 볼륨</label>
+          <select name="bgm_volume">
+            <option value="0.08">아주 작게</option>
+            <option value="0.12">작게</option>
+            <option value="0.16" selected>기본 · 음성 아래</option>
+            <option value="0.22">조금 크게</option>
+            <option value="0.30">크게</option>
+          </select>
+
+          <label>목소리 볼륨</label>
+          <select name="final_voice_volume">
+            <option value="0.8">조금 작게</option>
+            <option value="1.0" selected>기본</option>
+            <option value="1.2">조금 크게</option>
+            <option value="1.5">크게</option>
+          </select>
+
+          <label>BGM 시작 위치</label>
+          <select name="bgm_start_seconds">
+            <option value="0" selected>처음부터</option>
+            <option value="5">5초 지점부터</option>
+            <option value="10">10초 지점부터</option>
+            <option value="15">15초 지점부터</option>
+            <option value="30">30초 지점부터</option>
+          </select>
+
+          <div class="actions">
+            <button
+              class="btn green"
+              type="submit"
+              {{ 'disabled' if not a.reels_bgm_path else '' }}
+            >
+              {{ '🎵 최종 릴스 다시 만들기' if a.reels_final_path else '🎵 최종 릴스 만들기' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          음성 포함 릴스가 있으면 그것을 우선 사용하고,
+          없으면 기본 릴스에 BGM만 넣습니다.
+        </p>
+      </div>
+    </div>
+
+    {% if a.reels_final_path %}
+      <div style="margin-top:20px">
+        <video
+          controls
+          playsinline
+          preload="metadata"
+          style="
+            display:block;
+            width:100%;
+            max-height:720px;
+            border-radius:16px;
+            background:#111;
+          "
+        >
+          <source
+            src="{{ url_for('media', filename=a.reels_final_path) }}"
+            type="video/mp4"
+          >
+        </video>
+
+        <div class="actions">
+          <a
+            class="btn green"
+            href="{{ url_for('media', filename=a.reels_final_path) }}"
+            download
+          >
+            최종 MP4 다운로드
+          </a>
+
+          <form
+            method="post"
+            action="{{ url_for('delete_final_reels_video', article_id=a.id) }}"
+            onsubmit="return confirm('최종 릴스 영상을 삭제할까요?')"
+            style="margin:0"
+          >
+            <button class="btn red" type="submit">
+              최종 영상 삭제
+            </button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+</div>
+  </section>
+
+<div class="instatoon-subpanel" data-subpanel="zip">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>📦 콘텐츠 전체 패키지</h2>
+        <p class="small">
+          블로그·SNS·인스타툰·음성·릴스를 폴더별로 정리해 ZIP 하나로 내려받습니다.
+        </p>
+      </div>
+
+      {% if a.export_package_path %}
+        <span class="status">ZIP 준비됨</span>
+      {% else %}
+        <span class="status off">ZIP 없음</span>
+      {% endif %}
+    </div>
+
+    <div class="grid">
+      <div>
+        <form
+          method="post"
+          action="{{ url_for('create_content_export_package', article_id=a.id) }}"
+          onsubmit="
+            const button=this.querySelector('button[type=submit]');
+            if(button){
+              button.disabled=true;
+              button.innerText='⏳ 패키지 만드는 중...';
+            }
+          "
+        >
+          <label class="toggle">
+            <input
+              type="checkbox"
+              name="include_raw"
+              value="1"
+              checked
+            >
+            글씨 없는 원본 이미지도 포함
+          </label>
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              name="include_audio"
+              value="1"
+              checked
+            >
+            컷별 음성 MP3도 포함
+          </label>
+
+          <div class="actions">
+            <button class="btn green" type="submit">
+              {{ '📦 ZIP 다시 만들기' if a.export_package_path else '📦 전체 ZIP 만들기' }}
+            </button>
+          </div>
+        </form>
+
+        <p class="notice">
+          콘텐츠가 많을수록 ZIP 생성에 시간이 조금 걸릴 수 있습니다.
+          현재 생성되어 있는 파일만 패키지에 포함됩니다.
+        </p>
+      </div>
+
+      <div>
+        <h3>ZIP 구성</h3>
+        <div class="pipeline-grid">
+          <div class="pipeline-step">
+            <strong>블로그</strong>
+            <div class="small">본문 HTML·제목·태그</div>
+          </div>
+          <div class="pipeline-step">
+            <strong>SNS</strong>
+            <div class="small">인스타·Threads·쇼츠 대본</div>
+          </div>
+          <div class="pipeline-step">
+            <strong>인스타툰</strong>
+            <div class="small">8컷 이미지·원문</div>
+          </div>
+          <div class="pipeline-step">
+            <strong>음성</strong>
+            <div class="small">컷별 MP3</div>
+          </div>
+          <div class="pipeline-step">
+            <strong>영상</strong>
+            <div class="small">기본·음성·최종 MP4</div>
+          </div>
+          <div class="pipeline-step">
+            <strong>설정</strong>
+            <div class="small">manifest.json</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if a.export_package_path %}
+      <div class="actions">
+        <a
+          class="btn green"
+          href="{{ url_for('media', filename=a.export_package_path) }}"
+          download
+        >
+          ZIP 다운로드
+        </a>
+
+        <form
+          method="post"
+          action="{{ url_for('delete_content_export_package', article_id=a.id) }}"
+          onsubmit="return confirm('생성된 ZIP 패키지를 삭제할까요?')"
+          style="margin:0"
+        >
+          <button class="btn red" type="submit">
+            ZIP 삭제
+          </button>
+        </form>
+      </div>
+    {% endif %}
+</div>
+  </section>
+<div class="instatoon-subpanel" data-subpanel="cuts">
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div>
+        <h2>🎨 인스타툰 8컷</h2>
+        <p class="small">
+          컷별 장면·대사·자막을 확인하고 각각 복사할 수 있어요.
+        </p>
+
+        <div style="margin-top:16px">
+          <button
+            id="generate_all_btn"
+            class="btn green"
+            type="button"
+            onclick="generateAllCuts()"
+          >
+            🚀 내 이미지·캐릭터 고정 8컷 생성
+          </button>
+
+          <div
+            id="generate_progress"
+            class="small"
+            style="margin-top:12px;font-weight:700"
+          ></div>
+
+          <form
+            method="post"
+            action="{{ url_for('rebuild_instatoon_captions', article_id=a.id) }}"
+            style="margin-top:10px"
+          >
+            <button class="btn gray" type="submit">
+              기존 그림에 한글 다시 입히기
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <button
+        class="btn gray"
+        type="button"
+        onclick="copyText('instatoon_all_text', this)"
+      >
+        전체 복사
+      </button>
+    </div>
+
+    <textarea
+      id="instatoon_all_text"
+      readonly
+      style="position:absolute;left:-9999px"
+    >{{ instatoon_text }}</textarea>
+
+    <div class="instatoon-grid">
+      {% for cut in instatoon_cuts %}
+        {% if cut.strip() %}
+          <article class="instatoon-card" id="cut_block_{{ loop.index }}">
+            <span class="instatoon-number">CUT {{ loop.index }}</span>
+
+            <div
+              id="instatoon_cut_{{ loop.index }}"
+              class="instatoon-card-content"
+            >{{ cut.strip() }}</div>
+
+            <button
+              class="btn copy-btn"
+              type="button"
+              onclick="copyText('instatoon_cut_{{ loop.index }}', this)"
+            >
+              이 컷 복사
+            </button>
+
+            <form
+              method="post"
+              action="{{ url_for(
+                  'generate_instatoon_cut_image',
+                  article_id=a.id,
+                  cut_number=loop.index
+              ) }}"
+              style="margin-top:10px"
+            >
+              <select name="expression_hint" style="margin-bottom:8px">
+                <option value="">장면에 맞게 자동</option>
+                <option value="happy, bright smile">🙂 행복</option>
+                <option value="angry, frustrated expression">😡 화남</option>
+                <option value="sad, teary expression">😭 슬픔</option>
+                <option value="laughing, playful expression">😆 장난·웃음</option>
+                <option value="surprised, wide-eyed expression">😲 놀람</option>
+                <option value="worried, hesitant expression">😟 걱정</option>
+              </select>
+              <button class="btn" type="submit">
+                🖼 이 컷 다시 생성
+              </button>
+            </form>
+
+            {% set cut_audio_entries = instatoon_audio.get(loop.index|string, []) %}
+
+            <div
+              id="cut_audio_{{ loop.index }}"
+              style="margin-top:14px"
+            >
+              {% if cut_audio_entries %}
+                <h3>🎙️ 컷 음성</h3>
+
+                {% for audio in cut_audio_entries %}
+                  <div
+                    style="
+                      padding:12px;
+                      margin-top:9px;
+                      border:1px solid #e5e7eb;
+                      border-radius:12px;
+                      background:#fff;
+                    "
+                  >
+                    <strong>{{ audio.get('label', '음성') }}</strong>
+                    <div class="small" style="margin:5px 0 9px">
+                      {{ audio.get('text', '') }}
+                    </div>
+
+                    <audio
+                      controls
+                      preload="none"
+                      style="width:100%"
+                    >
+                      <source
+                        src="{{ url_for('media', filename=audio.get('filename')) }}"
+                        type="audio/mpeg"
+                      >
+                    </audio>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="small">
+                  아직 생성된 컷 음성이 없습니다.
+                </p>
+              {% endif %}
+            </div>
+
+            {% set image_filename = instatoon_images.get(loop.index|string) %}
+            {% set captioned_filename = instatoon_captioned_images.get(loop.index|string) %}
+
+            {% if captioned_filename or image_filename %}
+              <div style="margin-top:16px">
+                {% if captioned_filename %}
+                  <img
+                    src="{{ url_for('media', filename=captioned_filename) }}"
+                    alt="한글이 포함된 인스타툰 {{ loop.index }}컷"
+                    style="display:block;width:100%;border-radius:14px;border:1px solid #e5e7eb"
+                  >
+
+                  <div class="actions" style="margin-top:10px">
+                    <a
+                      class="btn green"
+                      href="{{ url_for('media', filename=captioned_filename) }}"
+                      target="_blank"
+                      download
+                    >
+                      최종 인스타툰 다운로드
+                    </a>
+
+                    {% if image_filename %}
+                      <a
+                        class="btn gray"
+                        href="{{ url_for('media', filename=image_filename) }}"
+                        target="_blank"
+                        download
+                      >
+                        글씨 없는 원본 다운로드
+                      </a>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <img
+                    src="{{ url_for('media', filename=image_filename) }}"
+                    alt="인스타툰 {{ loop.index }}컷"
+                    style="display:block;width:100%;border-radius:14px;border:1px solid #e5e7eb"
+                  >
+
+                  <p class="notice" style="margin-top:10px">
+                    위의 ‘기존 그림에 한글 다시 입히기’를 누르면 정확한 한글 대사와 자막이 합성됩니다.
+                  </p>
+                {% endif %}
+              </div>
+            {% endif %}
+          </article>
+        {% endif %}
+      {% endfor %}
+    </div>
+</div>
+  </section>
+{% endif %}
+{% if '🎨 인스타툰 8컷' not in (a.notes or '') %}
+<section class="card">
+  <h2>🎨 인스타툰</h2>
+  <p class="small">아직 생성된 인스타툰이 없습니다. 전체 파이프라인을 실행해 주세요.</p>
+</section>
+{% endif %}
+</div>
+
+<div class="css-tab-panel" data-panel="seo">
+<div class="grid">
+  <section class="card">
+    <h2>SEO 분석</h2>
+    <div class="score">{{ a.seo_score }}<span class="small"> / 100</span></div>
+
+    {% for c in seo_report.get('checks', []) %}
+      <div class="check">
+        <span class="{{ 'pass' if c.passed else 'fail' }}">
+          {{ '통과' if c.passed else '보완' }}
+        </span>
+        · <strong>{{ c.name }}</strong>
+
+        {% if not c.passed %}
+          <div class="small">{{ c.advice }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <h3>추천 태그</h3>
+    <div class="tags">
+      {% for t in tags %}
+        <span class="tag">#{{ t }}</span>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>AI 썸네일</h2>
+
+    {% if a.thumbnail_path %}
+      <div class="thumb-wrap">
+        <img
+          class="thumb"
+          src="{{ url_for('media', filename=a.thumbnail_path) }}"
+          alt="{{ a.title }}"
+        >
+        <div class="thumb-badge">{{ a.thumbnail_text or a.title }}</div>
+      </div>
+    {% else %}
+      <p class="small">
+        아직 썸네일이 없습니다. 글 내용에 맞는 가로형 대표 이미지를 만들어요.
+      </p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('generate_thumbnail_route', article_id=a.id) }}">
+      <label>썸네일 문구</label>
+      <input
+        name="thumbnail_text"
+        value="{{ a.thumbnail_text or a.title }}"
+        maxlength="45"
+      >
+
+      <label>이미지 분위기</label>
+      <select name="thumbnail_style">
+        <option>따뜻한 생활 사진</option>
+        <option>깔끔한 매거진</option>
+        <option>밝은 일러스트</option>
+        <option>전문적인 인포그래픽</option>
+      </select>
+
+      <div class="actions">
+        <button class="btn" type="submit">
+          {{ '썸네일 다시 만들기' if a.thumbnail_path else 'AI 썸네일 만들기' }}
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+</div>
+
+<div class="css-tab-panel" data-panel="publish">
+<section class="card">
+  <h2>업로드 체크리스트</h2>
+
+  <form method="post" action="{{ url_for('save_checklist', article_id=a.id) }}">
+    <div class="checklist">
+      <label class="check-item">
+        <input type="checkbox" name="blog_done" value="1" {{ 'checked' if a.blog_done else '' }}>
+        블로그 작성·확인
+      </label>
+
+      <label class="check-item">
+        <input type="checkbox" name="instagram_done" value="1" {{ 'checked' if a.instagram_done else '' }}>
+        인스타 업로드
+      </label>
+
+      <label class="check-item">
+        <input type="checkbox" name="threads_done" value="1" {{ 'checked' if a.threads_done else '' }}>
+        Threads 업로드
+      </label>
+
+      <label class="check-item">
+        <input type="checkbox" name="shorts_done" value="1" {{ 'checked' if a.shorts_done else '' }}>
+        릴스·쇼츠 촬영
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="btn gray" type="submit">체크리스트 저장</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>수익화 링크</h2>
+  <p class="small">
+    상품명과 본인의 제휴 링크를 넣으면 Blogger 글 아래에 추천 영역과 제휴 고지가 자동으로 붙습니다.
+  </p>
+
+  <div class="notice" style="margin-bottom:14px">
+    쿠팡 상품명으로 검색하면 제휴 링크가 자동으로 채워져요. (쿠팡파트너스 API 키가
+    설정되어 있고, 누적 판매금액 15만원 조건을 충족한 경우에만 작동해요. 아직이면
+    아래 칸에 손으로 입력하시면 돼요.)
+  </div>
+  <div class="actions" style="margin-bottom:6px">
+    <input id="coupang_search_keyword" placeholder="검색할 상품명 입력 (예: 어린이 간식 보관용기)" style="flex:1">
+    <button class="btn gray" type="button" onclick="searchCoupangProducts()">🔍 쿠팡 상품 검색</button>
+  </div>
+  <div id="coupang_search_status" class="small" style="margin:6px 0 0"></div>
+  <div id="coupang_search_results" style="margin-top:10px"></div>
+
+  <form method="post" action="{{ url_for('save_monetization', article_id=a.id) }}">
+    <div class="grid">
+      <div>
+        <label>쿠팡 상품명</label>
+        <input
+          id="coupang_product_name_input"
+          name="coupang_product_name"
+          value="{{ a.coupang_product_name or '' }}"
+          placeholder="예: 어린이 간식 보관용기"
+        >
+      </div>
+
+      <div>
+        <label>쿠팡파트너스 링크</label>
+        <input
+          id="coupang_link_input"
+          name="coupang_link"
+          value="{{ a.coupang_link or '' }}"
+          placeholder="https://..."
+        >
+      </div>
+
+      <div>
+        <label>애터미 상품명</label>
+        <input
+          name="atomy_product_name"
+          value="{{ a.atomy_product_name or '' }}"
+          placeholder="예: 애터미 주방세제"
+        >
+      </div>
+
+      <div>
+        <label>애터미 공유 링크</label>
+        <input
+          name="atomy_link"
+          value="{{ a.atomy_link or '' }}"
+          placeholder="https://..."
+        >
+      </div>
+
+      <div>
+        <label>토스쇼핑 상품명</label>
+        <input
+          name="toss_product_name"
+          value="{{ a.toss_product_name or '' }}"
+          placeholder="예: 무선 청소기"
+        >
+      </div>
+
+      <div>
+        <label>토스쇼핑 쉐어링크</label>
+        <input
+          name="toss_link"
+          value="{{ a.toss_link or '' }}"
+          placeholder="https://..."
+        >
+      </div>
+    </div>
+
+    <label class="toggle">
+      <input
+        type="checkbox"
+        name="affiliate_enabled"
+        value="1"
+        {{ 'checked' if a.affiliate_enabled else '' }}
+      >
+      Blogger 발행 글에 추천 영역 포함
+    </label>
+
+    <div class="actions">
+      <button class="btn" type="submit">수익화 설정 저장</button>
+    </div>
+  </form>
+
+  {% if a.affiliate_html %}
+    <div class="money-box" style="margin-top:18px">
+      <h3>발행될 추천 영역 미리보기</h3>
+      {{ a.affiliate_html|safe }}
+    </div>
+  {% endif %}
+
+  <p class="notice">
+    실제 상품 정보와 링크는 직접 확인해서 입력해 주세요.
+    이 기능은 상품을 자동 검색하거나 가격·효능을 확인하지 않습니다.
+  </p>
+</section>
+
+<section class="card">
+
+  <h2>Blogger 발행</h2>
+
+  {% if a.blogger_url %}
+    <p>
+      <a
+        class="btn gray"
+        href="{{ a.blogger_url }}"
+        target="_blank"
+        rel="noopener"
+      >
+        발행된 글 바로가기
+      </a>
+    </p>
+  {% endif %}
+
+  <p class="small">
+    처음에는 초안으로 확인하고, 이후 같은 블로그에 다시 보내면 기존 글이 업데이트됩니다.
+  </p>
+
+  {% if blogs %}
+    <form method="post" action="{{ url_for('publish_blogger', article_id=a.id) }}">
+      <label>블로그 선택</label>
+      <select name="blog_id">
+        {% for b in blogs %}
+          <option
+            value="{{ b.id }}"
+            {{ 'selected' if a.blogger_blog_id == b.id else '' }}
+          >
+            {{ b.name }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <label>발행 방식</label>
+      <select name="mode">
+        <option value="draft">초안으로 저장</option>
+        <option value="publish">바로 공개 발행</option>
+      </select>
+
+      <div class="actions">
+        <button class="btn green" type="submit">
+          {{ 'Blogger 글 업데이트' if a.blogger_post_id else 'Blogger로 보내기' }}
+        </button>
+      </div>
+    </form>
+
+    <form method="post" action="{{ url_for('schedule_blogger', article_id=a.id) }}">
+      <label>예약 발행 시간</label>
+      <input type="datetime-local" name="scheduled_at" required>
+
+      <label>예약할 블로그</label>
+      <select name="blog_id">
+        {% for b in blogs %}
+          <option value="{{ b.id }}">{{ b.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="actions">
+        <button class="btn orange" type="submit">공개 발행 예약</button>
+
+        {% if a.scheduled_at %}
+          <button
+            class="btn gray"
+            type="submit"
+            formaction="{{ url_for('cancel_schedule', article_id=a.id) }}"
+            formnovalidate
+          >
+            예약 취소
+          </button>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if a.scheduled_at %}
+      <p class="small">
+        현재 예약: {{ a.scheduled_at.strftime('%Y-%m-%d %H:%M') }}
+      </p>
+    {% endif %}
+  {% else %}
+    <p>홈 화면에서 Google Blogger를 먼저 연결해 주세요.</p>
+    <a class="btn" href="{{ url_for('google_connect') }}">Google 연결</a>
+  {% endif %}
+</section>
+
+
+<section class="card">
+  <h2>발행 이력</h2>
+
+  {% if publish_logs %}
+    <table>
+      <thead>
+        <tr>
+          <th>시간</th>
+          <th>작업</th>
+          <th>결과</th>
+          <th>링크</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for log in publish_logs %}
+          <tr>
+            <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ log.action }}</td>
+            <td>
+              {{ log.status }}
+              {% if log.message %}
+                <div class="small">{{ log.message }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.blogger_url %}
+                <a href="{{ log.blogger_url }}" target="_blank" rel="noopener">열기</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="small">아직 발행 이력이 없습니다.</p>
+  {% endif %}
+</section>
+</div>
+
+</div>
+</div>
+
+<script>
+function updateArticlePreview() {
+  const editor = document.getElementById("body_html_editor");
+  const preview = document.getElementById("article_live_preview");
+
+  if (!editor || !preview) {
+    return;
+  }
+
+  preview.innerHTML = editor.value;
+}
+
+async function generateAllCuts() {
+  const button = document.getElementById("generate_all_btn");
+  const progress = document.getElementById("generate_progress");
+
+  if (!button || !progress) {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "⏳ 순차 생성 중...";
+  button.style.opacity = "0.65";
+  button.style.cursor = "not-allowed";
+
+  for (let cutNumber = 1; cutNumber <= 8; cutNumber += 1) {
+    progress.textContent = `⏳ ${cutNumber}/8 생성 중...`;
+
+    try {
+      const response = await fetch(
+        `/articles/{{ a.id }}/instatoon/${cutNumber}/image-json`,
+        {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        }
+      );
+
+      let result;
+
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        throw new Error(`서버 응답을 읽지 못했습니다. 상태 코드: ${response.status}`);
+      }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.message || `${cutNumber}컷 생성에 실패했습니다.`
+        );
+      }
+
+      progress.textContent = `✅ ${cutNumber}/8 생성 완료`;
+    } catch (error) {
+      progress.innerHTML =
+        `❌ ${cutNumber}컷 생성 실패<br>${String(error.message || error)}`;
+
+      button.disabled = false;
+      button.textContent = "🚀 실패한 컷부터 다시 생성";
+      button.style.opacity = "1";
+      button.style.cursor = "pointer";
+      return;
+    }
+  }
+
+  progress.textContent = "🎉 8컷 생성 완료! 화면을 새로고침합니다.";
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 900);
+}
+
+async function generateAllCutAudio() {
+  const button = document.getElementById("generate_all_audio_btn");
+  const progress = document.getElementById("audio_generation_progress");
+  const motherMood = document.getElementById("mother_mood");
+  const daughterMood = document.getElementById("daughter_mood");
+  const narrationMood = document.getElementById("narration_mood");
+
+  if (!button || !progress) {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "⏳ 음성 생성 중...";
+  button.style.opacity = "0.65";
+
+  for (let cutNumber = 1; cutNumber <= 8; cutNumber += 1) {
+    progress.textContent = `⏳ ${cutNumber}/8컷 음성 생성 중...`;
+
+    const formData = new FormData();
+    formData.append(
+      "mother_mood",
+      motherMood ? motherMood.value : "따뜻하고 자연스럽게"
+    );
+    formData.append(
+      "daughter_mood",
+      daughterMood ? daughterMood.value : "밝고 장난스럽게"
+    );
+    formData.append(
+      "narration_mood",
+      narrationMood ? narrationMood.value : "편안하게 이야기하듯"
+    );
+
+    try {
+      const response = await fetch(
+        `/articles/{{ a.id }}/instatoon/${cutNumber}/audio-json`,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        }
+      );
+
+      let result;
+
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        throw new Error(
+          `서버 응답을 읽지 못했습니다. 상태 코드: ${response.status}`
+        );
+      }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.message || `${cutNumber}컷 음성 생성 실패`
+        );
+      }
+
+      progress.textContent = `✅ ${cutNumber}/8컷 음성 생성 완료`;
+    } catch (error) {
+      progress.innerHTML =
+        `❌ ${cutNumber}컷 음성 실패<br>${String(error.message || error)}`;
+
+      button.disabled = false;
+      button.textContent = "🎙️ 실패한 컷부터 다시 생성";
+      button.style.opacity = "1";
+      return;
+    }
+  }
+
+  progress.textContent = "🎉 8컷 음성 생성 완료! 화면을 새로고침합니다.";
+
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 900);
+}
+
+
+let productionQueueCancelled = false;
+
+function queueElement(id) {
+  return document.getElementById(id);
+}
+
+function queueValue(id, fallback = "") {
+  const element = queueElement(id);
+  return element ? element.value : fallback;
+}
+
+function queueChecked(id) {
+  const element = queueElement(id);
+  return Boolean(element && element.checked);
+}
+
+function setQueueProgress(message) {
+  const progress = queueElement("production_queue_progress");
+  const badge = queueElement("production_queue_badge");
+
+  if (progress) {
+    progress.textContent = message;
+  }
+
+  if (badge) {
+    badge.textContent = message.split("\n")[0];
+    badge.classList.remove("off");
+  }
+}
+
+function markQueueStep(step, statusText) {
+  const element = document.querySelector(
+    `[data-queue-step="${step}"] .small`
+  );
+
+  if (element) {
+    element.textContent = statusText;
+  }
+}
+
+function stopProductionQueue() {
+  productionQueueCancelled = true;
+  setQueueProgress("⏸ 중지 요청됨. 현재 작업이 끝나면 멈춥니다.");
+}
+
+async function queueFetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  let result;
+
+  try {
+    result = await response.json();
+  } catch (error) {
+    throw new Error(
+      `서버 응답을 읽지 못했습니다. 상태 코드: ${response.status}`
+    );
+  }
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.message || "작업에 실패했습니다.");
+  }
+
+  return result;
+}
+
+async function generateQueueImages() {
+  for (let cutNumber = 1; cutNumber <= 8; cutNumber += 1) {
+    if (productionQueueCancelled) {
+      return false;
+    }
+
+    setQueueProgress(`1단계 · 이미지 ${cutNumber}/8 생성 중...`);
+    markQueueStep("images", `${cutNumber}/8 생성 중`);
+
+    await queueFetchJson(
+      `/articles/{{ a.id }}/instatoon/${cutNumber}/image-json`,
+      {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      }
+    );
+
+    markQueueStep("images", `${cutNumber}/8 완료`);
+  }
+
+  return true;
+}
+
+async function generateQueueAudio() {
+  const motherMood = queueValue(
+    "mother_mood",
+    "따뜻하고 자연스럽게"
+  );
+  const daughterMood = queueValue(
+    "daughter_mood",
+    "밝고 장난스럽게"
+  );
+  const narrationMood = queueValue(
+    "narration_mood",
+    "편안하게 이야기하듯"
+  );
+
+  for (let cutNumber = 1; cutNumber <= 8; cutNumber += 1) {
+    if (productionQueueCancelled) {
+      return false;
+    }
+
+    setQueueProgress(`2단계 · 음성 ${cutNumber}/8 생성 중...`);
+    markQueueStep("audio", `${cutNumber}/8 생성 중`);
+
+    const formData = new FormData();
+    formData.append("mother_mood", motherMood);
+    formData.append("daughter_mood", daughterMood);
+    formData.append("narration_mood", narrationMood);
+
+    await queueFetchJson(
+      `/articles/{{ a.id }}/instatoon/${cutNumber}/audio-json`,
+      {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      }
+    );
+
+    markQueueStep("audio", `${cutNumber}/8 완료`);
+  }
+
+  return true;
+}
+
+async function generateQueueReels() {
+  if (productionQueueCancelled) {
+    return false;
+  }
+
+  setQueueProgress("3단계 · 기본 릴스 생성 중...");
+  markQueueStep("reels", "생성 중");
+
+  const formData = new FormData();
+  formData.append(
+    "seconds_per_cut",
+    queueValue("queue_seconds_per_cut", "3")
+  );
+  formData.append(
+    "motion_style",
+    queueValue("queue_motion_style", "다양한 움직임")
+  );
+  formData.append("fps", "30");
+  formData.append("transition_seconds", "0.35");
+
+  await queueFetchJson(
+    `/articles/{{ a.id }}/production/reels-json`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  markQueueStep("reels", "완료");
+  return true;
+}
+
+async function generateQueueVoiceReels() {
+  if (productionQueueCancelled) {
+    return false;
+  }
+
+  setQueueProgress("4단계 · 음성 포함 릴스 생성 중...");
+  markQueueStep("reels_voice", "생성 중");
+
+  const formData = new FormData();
+  formData.append(
+    "voice_volume",
+    queueValue("queue_voice_volume", "1.0")
+  );
+  formData.append(
+    "voice_cut_duration",
+    queueValue("queue_seconds_per_cut", "3")
+  );
+
+  await queueFetchJson(
+    `/articles/{{ a.id }}/production/reels-voice-json`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  markQueueStep("reels_voice", "완료");
+  return true;
+}
+
+async function generateQueueFinalReels() {
+  if (productionQueueCancelled) {
+    return false;
+  }
+
+  setQueueProgress("5단계 · BGM 최종 릴스 확인 중...");
+  markQueueStep("reels_final", "처리 중");
+
+  const formData = new FormData();
+  formData.append("bgm_volume", "0.16");
+  formData.append(
+    "final_voice_volume",
+    queueValue("queue_voice_volume", "1.0")
+  );
+  formData.append("bgm_start_seconds", "0");
+
+  const result = await queueFetchJson(
+    `/articles/{{ a.id }}/production/reels-final-json`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  markQueueStep(
+    "reels_final",
+    result.skipped ? "BGM 없음 · 건너뜀" : "완료"
+  );
+  return true;
+}
+
+async function generateQueueZip() {
+  if (productionQueueCancelled) {
+    return false;
+  }
+
+  setQueueProgress("6단계 · 전체 ZIP 패키지 생성 중...");
+  markQueueStep("zip", "생성 중");
+
+  const formData = new FormData();
+  formData.append("include_raw", "1");
+  formData.append("include_audio", "1");
+
+  await queueFetchJson(
+    `/articles/{{ a.id }}/production/export-json`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  markQueueStep("zip", "완료");
+  return true;
+}
+
+async function startProductionQueue() {
+  const startButton = queueElement("production_queue_start_btn");
+  const stopButton = queueElement("production_queue_stop_btn");
+
+  productionQueueCancelled = false;
+
+  if (startButton) {
+    startButton.disabled = true;
+    startButton.textContent = "⏳ 전체 제작 중...";
+  }
+
+  if (stopButton) {
+    stopButton.disabled = false;
+  }
+
+  try {
+    if (queueChecked("queue_make_images")) {
+      const continued = await generateQueueImages();
+      if (!continued) return;
+    }
+
+    if (queueChecked("queue_make_audio")) {
+      const continued = await generateQueueAudio();
+      if (!continued) return;
+    }
+
+    if (queueChecked("queue_make_reels")) {
+      let continued = await generateQueueReels();
+      if (!continued) return;
+
+      continued = await generateQueueVoiceReels();
+      if (!continued) return;
+    }
+
+    if (queueChecked("queue_make_final")) {
+      const continued = await generateQueueFinalReels();
+      if (!continued) return;
+    }
+
+    if (queueChecked("queue_make_zip")) {
+      const continued = await generateQueueZip();
+      if (!continued) return;
+    }
+
+    if (!productionQueueCancelled) {
+      setQueueProgress(
+        "🎉 전체 제작 완료!\n화면을 새로고침해 결과를 불러옵니다."
+      );
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    }
+  } catch (error) {
+    setQueueProgress(
+      `❌ 제작 중 오류\n${String(error.message || error)}`
+    );
+  } finally {
+    if (startButton) {
+      startButton.disabled = false;
+      startButton.textContent = "⚡ 전체 제작 다시 시작";
+    }
+
+    if (stopButton) {
+      stopButton.disabled = true;
+    }
+  }
+}
+
+function activateSavedContentTab(){const h=location.hash.replace('#','');const s=localStorage.getItem('mi_creator_active_tab');const d=h||s||'blog';const r=document.getElementById(`tab-${d}`);if(r)r.checked=true;document.querySelectorAll('input[id^="tab-"]').forEach(i=>i.addEventListener('change',()=>{if(!i.checked)return;const n=i.id.replace('tab-','');localStorage.setItem('mi_creator_active_tab',n);if(n==='instatoon')history.replaceState(null,'','#instatoon')}))}
+function activateSavedInstatoonSubtab(){const saved=localStorage.getItem('mi_creator_instatoon_subtab');if(saved){const r=document.getElementById(`subtab-${saved}`);if(r)r.checked=true}document.querySelectorAll('input[id^="subtab-"]').forEach(i=>i.addEventListener('change',()=>{if(!i.checked)return;localStorage.setItem('mi_creator_instatoon_subtab',i.id.replace('subtab-',''))}))}
+document.addEventListener('DOMContentLoaded',()=>{activateSavedContentTab();activateSavedInstatoonSubtab()});
+
+async function searchCoupangProducts(){
+  const keyword = document.getElementById('coupang_search_keyword').value.trim();
+  const statusBox = document.getElementById('coupang_search_status');
+  const resultsBox = document.getElementById('coupang_search_results');
+  resultsBox.innerHTML = '';
+  if(!keyword){
+    statusBox.textContent = '검색어를 먼저 입력해 주세요.';
+    return;
+  }
+  statusBox.textContent = '검색 중...';
+  try{
+    const url = `{{ url_for('coupang_product_search', article_id=a.id) }}?keyword=${encodeURIComponent(keyword)}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if(!data.ok){
+      statusBox.textContent = data.message || '검색에 실패했어요.';
+      return;
+    }
+    statusBox.textContent = `${data.results.length}개 찾았어요. 원하는 상품을 클릭하면 자동으로 채워져요.`;
+    data.results.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'calendar-item';
+      row.style.cursor = 'pointer';
+      row.style.display = 'flex';
+      row.style.gap = '12px';
+      row.style.alignItems = 'center';
+      row.innerHTML = `
+        ${item.image ? `<img src="${item.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:0 0 auto">` : ''}
+        <div style="flex:1">
+          <strong>${item.name}</strong>
+          <div class="small">${item.price ? Number(item.price).toLocaleString() + '원' : ''} ${item.is_rocket ? '· 로켓배송' : ''}</div>
+        </div>
+      `;
+      row.addEventListener('click', () => {
+        document.getElementById('coupang_product_name_input').value = item.name;
+        document.getElementById('coupang_link_input').value = item.url;
+        statusBox.textContent = '선택한 상품으로 채워졌어요. 아래 "수익화 설정 저장" 버튼을 눌러 저장해 주세요.';
+      });
+      resultsBox.appendChild(row);
+    });
+  }catch(err){
+    statusBox.textContent = '검색 중 오류가 발생했어요.';
+  }
+}
+</script>

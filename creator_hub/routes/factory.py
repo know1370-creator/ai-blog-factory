@@ -261,7 +261,7 @@ def dashboard():
     return page("""
 <style>
 .factory-progress{height:9px;background:#eceef3;border-radius:99px;overflow:hidden}
-.factory-progress > div{height:100%;background:linear-gradient(90deg,#4f46e5,#8b5cf6)}
+.factory-progress > div{height:100%;background:#4b3f72}
 .factory-stage{display:inline-block;padding:5px 9px;border-radius:99px;background:#eef0f5;margin:2px;font-size:.82rem}
 .factory-stage.done{background:#dcfce7;color:#166534;font-weight:700}
 .factory-card{border:1px solid #e5e7eb;border-radius:16px;padding:15px;margin-bottom:12px;background:#fff}
@@ -344,7 +344,7 @@ def dashboard():
         rows=rows,
         templates=templates,
         stages=FACTORY_STAGES,
-        page_title="AI 콘텐츠 팩토리 | MI Creator Hub",
+        page_title="AI 콘텐츠 팩토리 | MI Creator OS",
     )
 
 
@@ -493,7 +493,7 @@ def create_project():
         template=template,
         source_item=source_item,
         prefill=prefill,
-        page_title="새 콘텐츠 패키지 | MI Creator Hub",
+        page_title="새 콘텐츠 패키지 | MI Creator OS",
     )
 
 
@@ -522,7 +522,7 @@ def project_detail(project_id):
 <style>
 .output-card{border:1px solid #e5e7eb;border-radius:15px;padding:14px;margin-bottom:12px}
 .progress-track{height:10px;background:#eceef3;border-radius:99px;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,#4f46e5,#8b5cf6)}
+.progress-fill{height:100%;background:#4b3f72}
 </style>
 
 <section class="card">
@@ -592,7 +592,7 @@ def project_detail(project_id):
         outputs=outputs,
         progress=project_progress(project),
         stages=FACTORY_STAGES,
-        page_title="콘텐츠 패키지 | MI Creator Hub",
+        page_title="콘텐츠 패키지 | MI Creator OS",
     )
 
 
@@ -633,7 +633,7 @@ def edit_output(output_id):
 </section>
 """,
         output=output,
-        page_title="결과물 편집 | MI Creator Hub",
+        page_title="결과물 편집 | MI Creator OS",
     )
 
 
@@ -769,7 +769,7 @@ def templates():
 """,
         rows=rows,
         brands=BRANDS,
-        page_title="콘텐츠 템플릿 | MI Creator Hub",
+        page_title="콘텐츠 템플릿 | MI Creator OS",
     )
 
 
@@ -852,5 +852,5 @@ def series():
 </section>
 """,
         rows=rows,
-        page_title="시리즈 메모리 | MI Creator Hub",
+        page_title="시리즈 메모리 | MI Creator OS",
     )

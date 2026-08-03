@@ -213,7 +213,7 @@ def dashboard():
         selected_start=selected_start,
         selected_end=selected_end,
         items=items,
-        page_title="주간 콘텐츠 플래너 | MI Creator Hub",
+        page_title="주간 콘텐츠 플래너 | MI Creator OS",
     )
 
 
@@ -318,6 +318,10 @@ def create_content(item_id):
         article.instagram_caption = social.get("instagram_caption", "")
         article.threads_text = social.get("threads_text", "")
         article.shorts_script = social.get("shorts_script", "")
+        article.youtube_title = social.get("youtube_title", "")
+        article.youtube_description = social.get("youtube_description", "")
+        article.youtube_tags = social.get("youtube_tags", "")
+        article.tiktok_caption = social.get("tiktok_caption", "")
 
         item.article_id = article.id
         item.status = "초안 완성"

@@ -2,11 +2,11 @@
 import os
 from datetime import datetime
 
-from flask import Blueprint, render_template_string
+from flask import Blueprint, render_template_string, send_file
 from markupsafe import Markup
 from sqlalchemy import text
 
-from ..legacy_app import BASE_HTML, Article, db
+from ..legacy_app import BASE_DIR, BASE_HTML, Article, db
 from .business import FinanceEntry
 from .planner import WeeklyPlanItem
 from .analytics import ContentMetric
@@ -67,6 +67,7 @@ def dashboard():
 
     checks.extend([
         ("OpenAI 키", configured("OPENAI_API_KEY"), "설정됨" if configured("OPENAI_API_KEY") else "미설정"),
+        ("쿠팡파트너스 API 키", configured("COUPANG_ACCESS_KEY") and configured("COUPANG_SECRET_KEY"), "설정됨" if configured("COUPANG_ACCESS_KEY") and configured("COUPANG_SECRET_KEY") else "미설정 (수동 입력으로 대체됨)"),
         ("Blogger Client ID", configured("GOOGLE_CLIENT_ID"), "설정됨" if configured("GOOGLE_CLIENT_ID") else "미설정"),
         ("Blogger Client Secret", configured("GOOGLE_CLIENT_SECRET"), "설정됨" if configured("GOOGLE_CLIENT_SECRET") else "미설정"),
         ("앱 Secret Key", configured("SECRET_KEY"), "설정됨" if configured("SECRET_KEY") else "서버 재시작 시 세션이 바뀔 수 있음"),
@@ -75,6 +76,11 @@ def dashboard():
 
     passed = sum(1 for _, ok, _ in checks if ok)
     failed = len(checks) - passed
+
+    sqlite_path = BASE_DIR / "creator.db"
+    using_sqlite = not configured("DATABASE_URL")
+    sqlite_exists = sqlite_path.exists()
+    sqlite_size_mb = round(sqlite_path.stat().st_size / (1024 * 1024), 2) if sqlite_exists else 0
 
     return page("""
 <section class="card">
@@ -94,6 +100,34 @@ def dashboard():
     <div class="stat"><strong>{{failed}}</strong><span class="small">확인 필요</span></div>
     <div class="stat"><strong>{{checked_at}}</strong><span class="small">점검 시각</span></div>
   </div>
+</section>
+
+<section class="card">
+  <h2>데이터 백업</h2>
+  {% if using_sqlite %}
+    {% if sqlite_exists %}
+      <p class="small">
+        지금 기본 SQLite 파일을 쓰고 있어요 (현재 크기: {{sqlite_size_mb}}MB).
+        서버가 재배포되면 이 파일이 초기화될 수 있으니, 중요한 작업을 마친 뒤에는
+        가끔 눌러서 내려받아 두는 걸 추천해요.
+      </p>
+      <div class="actions">
+        <a class="btn" href="{{url_for('diagnostics_v95.download_backup')}}">💾 지금 백업 다운로드</a>
+      </div>
+      <p class="notice" style="margin-top:12px">
+        가장 확실한 방법은 Render에서 PostgreSQL 데이터베이스를 하나 만들어 연결하는
+        거예요. 그러면 재배포돼도 데이터가 안전하게 유지돼요. 원하시면 이 전환도
+        도와드릴게요.
+      </p>
+    {% else %}
+      <p class="small">아직 데이터베이스 파일이 생성되지 않았어요.</p>
+    {% endif %}
+  {% else %}
+    <p class="small">
+      외부 데이터베이스(Postgres 등)를 사용 중이에요. 재배포돼도 데이터가
+      사라지지 않는 구조라, 지금은 별도 다운로드 백업이 꼭 필요하진 않아요.
+    </p>
+  {% endif %}
 </section>
 
 <section class="card">
@@ -118,5 +152,22 @@ def dashboard():
         passed=passed,
         failed=failed,
         checked_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        page_title="시스템 점검 | MI Creator Hub",
+        using_sqlite=using_sqlite,
+        sqlite_exists=sqlite_exists,
+        sqlite_size_mb=sqlite_size_mb,
+        page_title="시스템 점검 | MI Creator OS",
+    )
+
+
+@diagnostics_bp.get("/backup-download")
+def download_backup():
+    sqlite_path = BASE_DIR / "creator.db"
+    if not sqlite_path.exists():
+        return "백업할 데이터베이스 파일을 찾을 수 없습니다.", 404
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return send_file(
+        sqlite_path,
+        as_attachment=True,
+        download_name=f"mi_creator_backup_{timestamp}.db",
     )

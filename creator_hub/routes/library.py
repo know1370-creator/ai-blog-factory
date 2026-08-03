@@ -325,7 +325,7 @@ def dashboard():
         categories=CATEGORIES,
         content_types=CONTENT_TYPES,
         statuses=STATUSES,
-        page_title="콘텐츠 라이브러리 | MI Creator Hub",
+        page_title="콘텐츠 라이브러리 | MI Creator OS",
     )
 
 
@@ -434,7 +434,7 @@ def item_form(item=None, duplicate=False):
         categories=CATEGORIES,
         content_types=CONTENT_TYPES,
         statuses=STATUSES,
-        page_title="콘텐츠 프로젝트 | MI Creator Hub",
+        page_title="콘텐츠 프로젝트 | MI Creator OS",
     )
 
 

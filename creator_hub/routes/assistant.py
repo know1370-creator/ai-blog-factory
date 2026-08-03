@@ -1,7 +1,5 @@
 """V9.2 one-click AI content assistant."""
 import json
-from datetime import datetime
-
 from flask import Blueprint, flash, redirect, render_template_string, request, url_for
 from markupsafe import Markup
 
@@ -10,14 +8,15 @@ from ..legacy_app import (
     Article,
     analyze_seo,
     db,
-    generate_article,
     generate_social_pack,
     pipeline_progress,
 )
 
+from ..services.ai_service import AIService
 
 assistant_bp = Blueprint("assistant_v92", __name__, url_prefix="/assistant")
 
+ai_service = AIService()
 
 BRAND_PRESETS = {
     "말썽쟁이 딸랑구": {
@@ -45,6 +44,17 @@ BRAND_PRESETS = {
         "audience": "실용적인 육아·주방·생활용품을 찾는 사람",
         "notes": "구매를 강요하지 않고 장단점과 선택 기준을 중심으로 작성한다.",
     },
+    "오늘의 운세": {
+        "brand_style": "운세·라이프스타일",
+        "audience": "매일 아침 오늘의 띠별·별자리 운세를 가볍게 확인하고 싶은 사람",
+        "notes": (
+            "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
+            "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 조언처럼 "
+            "들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' 같은 안내를 "
+            "자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, 정확한 금액 등)는 "
+            "만들어내지 않는다."
+        ),
+    },
 }
 
 
@@ -55,6 +65,7 @@ def page(body_template, **context):
 
 @assistant_bp.get("/")
 def dashboard():
+    prompt = request.args.get("prompt", "")
     recent = Article.query.order_by(Article.created_at.desc()).limit(8).all()
     progress_map = {article.id: pipeline_progress(article) for article in recent}
 
@@ -74,7 +85,13 @@ def dashboard():
   <h2>오늘 콘텐츠 만들기</h2>
   <form method="post" action="{{url_for('assistant_v92.generate')}}">
     <label>주제 또는 핵심 키워드</label>
-    <input name="topic" required maxlength="200" placeholder="예: 엄마, 과자 봉지가 왜 반이나 비어 있어?">
+    <input
+name="topic"
+required
+maxlength="200"
+value="{{prompt}}"
+placeholder="예: 엄마, 과자 봉지가 왜 반이나 비어 있어?"
+>
 
     <label>브랜드</label>
     <select name="brand_name" required>
@@ -155,7 +172,8 @@ def dashboard():
         presets=BRAND_PRESETS,
         recent=recent,
         progress_map=progress_map,
-        page_title="AI 콘텐츠 비서 | MI Creator Hub",
+        prompt=prompt,
+        page_title="AI 콘텐츠 비서 | MI Creator OS V19.1",
     )
 
 
@@ -168,18 +186,20 @@ def generate():
     if not topic:
         flash("주제를 입력해 주세요.")
         return redirect(url_for("assistant_v92.dashboard"))
+
     if not preset:
         flash("올바른 브랜드를 선택해 주세요.")
         return redirect(url_for("assistant_v92.dashboard"))
 
     extra_notes = request.form.get("extra_notes", "").strip()
     combined_notes = preset["notes"]
+
     if extra_notes:
         combined_notes += f"\n사용자가 추가한 내용: {extra_notes}"
 
     try:
-        article_data = generate_article(
-            keyword=topic,
+        article_data = ai_service.generate(
+            topic=topic,
             brand_style=preset["brand_style"],
             article_type=request.form.get("article_type", "정보형"),
             length=request.form.get("length", "약 2,500자"),
@@ -206,6 +226,7 @@ def generate():
             notes=combined_notes,
             tags=tags,
         )
+
         db.session.add(article)
         db.session.flush()
 
@@ -216,6 +237,10 @@ def generate():
         article.instagram_caption = social.get("instagram_caption", "")
         article.threads_text = social.get("threads_text", "")
         article.shorts_script = social.get("shorts_script", "")
+        article.youtube_title = social.get("youtube_title", "")
+        article.youtube_description = social.get("youtube_description", "")
+        article.youtube_tags = social.get("youtube_tags", "")
+        article.tiktok_caption = social.get("tiktok_caption", "")
 
         db.session.commit()
         flash("AI 콘텐츠 비서가 블로그와 SNS 콘텐츠를 모두 만들었어요.")

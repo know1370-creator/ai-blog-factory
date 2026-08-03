@@ -1,22 +1,33 @@
 import base64
+import hashlib
+import hmac
 import json
+import math
 import os
 import re
 import secrets
+import shutil
+import subprocess
+import tempfile
+import time
+import urllib.request
+import zipfile
 from html import escape
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from flask import (
-    Flask, flash, redirect, render_template_string, request,
-    send_from_directory, session, url_for
+    Flask, flash, jsonify, redirect, render_template, render_template_string,
+    request, send_from_directory, session, url_for
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from markupsafe import Markup
 from openai import OpenAI
+from werkzeug.utils import secure_filename
+from PIL import Image, ImageDraw, ImageFont
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -24,10 +35,24 @@ from googleapiclient.discovery import build
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+# Codespace/로컬 개발 환경에서는 터미널에 export로 매번 키를 넣지 않아도,
+# BASE_DIR/.env 파일에 OPENAI_API_KEY=... 형태로 한 번만 적어두면
+# 서버가 시작할 때 자동으로 읽어옵니다. (python-dotenv가 없으면 조용히
+# 건너뛰고 기존처럼 실제 환경변수만 사용합니다. Render 등 실제 배포
+# 환경에서는 이미 대시보드에 등록한 값을 그대로 쓰므로 영향이 없습니다.)
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
+
 MEDIA_DIR = BASE_DIR / "media"
 MEDIA_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
+APP_VERSION = "V33 ULTIMATE"
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -42,6 +67,15 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/blogger"]
 KST = ZoneInfo("Asia/Seoul")
+
+# 쿠팡파트너스 오픈API. 파트너스 사이트에서 API 키를 발급받은 뒤
+# 이 두 값을 환경변수로 등록하면 상품명 검색만으로 제휴 링크를 바로
+# 가져올 수 있습니다. 키가 없으면 이 기능은 자동으로 꺼진 채로
+# 동작하고(에러를 내지 않고 "설정되지 않음" 상태로만 표시), 지금처럼
+# 손으로 링크를 붙여넣는 방식은 그대로 계속 쓸 수 있습니다.
+COUPANG_ACCESS_KEY = os.getenv("COUPANG_ACCESS_KEY", "")
+COUPANG_SECRET_KEY = os.getenv("COUPANG_SECRET_KEY", "")
+COUPANG_API_DOMAIN = "https://api-gateway.coupang.com"
 
 
 class Article(db.Model):
@@ -67,10 +101,35 @@ class Article(db.Model):
     instagram_caption = db.Column(db.Text, default="")
     threads_text = db.Column(db.Text, default="")
     shorts_script = db.Column(db.Text, default="")
+    youtube_title = db.Column(db.String(300), default="")
+    youtube_description = db.Column(db.Text, default="")
+    youtube_tags = db.Column(db.String(500), default="")
+    tiktok_caption = db.Column(db.Text, default="")
+    instatoon_images = db.Column(db.Text, default="{}")
+    instatoon_captioned_images = db.Column(db.Text, default="{}")
+    instatoon_character_profile = db.Column(db.Text, default="{}")
+    instatoon_character_sheet = db.Column(db.String(500), nullable=True)
+    instatoon_reference_image = db.Column(db.String(500), nullable=True)
+    reels_path = db.Column(db.String(500), nullable=True)
+    reels_settings = db.Column(db.Text, default="{}")
+    instatoon_audio = db.Column(db.Text, default="{}")
+    instatoon_audio_settings = db.Column(db.Text, default="{}")
+    reels_voice_path = db.Column(db.String(500), nullable=True)
+    reels_voice_settings = db.Column(db.Text, default="{}")
+    reels_bgm_path = db.Column(db.String(500), nullable=True)
+    reels_final_path = db.Column(db.String(500), nullable=True)
+    reels_final_settings = db.Column(db.Text, default="{}")
+    export_package_path = db.Column(db.String(500), nullable=True)
+    export_package_settings = db.Column(db.Text, default="{}")
+    director_report = db.Column(db.Text, default="{}")
+    director_revised_instatoon = db.Column(db.Text, default="")
+    production_queue_state = db.Column(db.Text, default="{}")
     coupang_product_name = db.Column(db.String(300), default="")
     coupang_link = db.Column(db.String(1000), default="")
     atomy_product_name = db.Column(db.String(300), default="")
     atomy_link = db.Column(db.String(1000), default="")
+    toss_product_name = db.Column(db.String(300), default="")
+    toss_link = db.Column(db.String(1000), default="")
     affiliate_html = db.Column(db.Text, default="")
     affiliate_enabled = db.Column(db.Boolean, default=False)
     blog_done = db.Column(db.Boolean, default=False)
@@ -92,6 +151,22 @@ class PublishLog(db.Model):
 
     article = db.relationship("Article", backref=db.backref("publish_logs", lazy=True, cascade="all, delete-orphan"))
 
+
+
+
+class InstatoonPreset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False, unique=True)
+    description = db.Column(db.Text, default="")
+    profile_json = db.Column(db.Text, default="{}")
+    reference_image = db.Column(db.String(500), nullable=True)
+    character_sheet = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
 
 
 
@@ -127,10 +202,35 @@ def ensure_schema():
         "instagram_caption": "TEXT",
         "threads_text": "TEXT",
         "shorts_script": "TEXT",
+        "youtube_title": "VARCHAR(300)",
+        "youtube_description": "TEXT",
+        "youtube_tags": "VARCHAR(500)",
+        "tiktok_caption": "TEXT",
+        "instatoon_images": "TEXT DEFAULT '{}'",
+        "instatoon_captioned_images": "TEXT DEFAULT '{}'",
+        "instatoon_character_profile": "TEXT DEFAULT '{}'",
+        "instatoon_character_sheet": "VARCHAR(500)",
+        "instatoon_reference_image": "VARCHAR(500)",
+        "reels_path": "VARCHAR(500)",
+        "reels_settings": "TEXT DEFAULT '{}'",
+        "instatoon_audio": "TEXT DEFAULT '{}'",
+        "instatoon_audio_settings": "TEXT DEFAULT '{}'",
+        "reels_voice_path": "VARCHAR(500)",
+        "reels_voice_settings": "TEXT DEFAULT '{}'",
+        "reels_bgm_path": "VARCHAR(500)",
+        "reels_final_path": "VARCHAR(500)",
+        "reels_final_settings": "TEXT DEFAULT '{}'",
+        "export_package_path": "VARCHAR(500)",
+        "export_package_settings": "TEXT DEFAULT '{}'",
+        "director_report": "TEXT DEFAULT '{}'",
+        "director_revised_instatoon": "TEXT",
+        "production_queue_state": "TEXT DEFAULT '{}'",
         "coupang_product_name": "VARCHAR(300)",
         "coupang_link": "VARCHAR(1000)",
         "atomy_product_name": "VARCHAR(300)",
         "atomy_link": "VARCHAR(1000)",
+        "toss_product_name": "VARCHAR(300)",
+        "toss_link": "VARCHAR(1000)",
         "affiliate_html": "TEXT",
         "affiliate_enabled": "BOOLEAN DEFAULT FALSE" if dialect == "postgresql" else "INTEGER DEFAULT 0",
         "blog_done": "BOOLEAN DEFAULT FALSE" if dialect == "postgresql" else "INTEGER DEFAULT 0",
@@ -163,10 +263,46 @@ def set_setting(key, value):
     db.session.commit()
 
 
+def log_ai_usage(category):
+    """OpenAI를 호출할 때마다 이번 달 사용 횟수를 자동으로 1 늘립니다.
+    정확한 달러 비용은 모델별 가격이 자주 바뀌어 여기서 추정하지 않고,
+    "몇 번 썼는지"만 정확하게 기록합니다. 실제 청구 금액은 OpenAI
+    사용량 페이지(platform.openai.com/usage)에서 확인해 수익 대시보드에
+    직접 입력하는 방식은 그대로 유지합니다. 기록 실패는 조용히 무시합니다
+    (콘텐츠 생성 자체가 이 기록 때문에 실패하면 안 되므로).
+    """
+    try:
+        month_key = f"ai_usage_{datetime.utcnow().strftime('%Y-%m')}"
+        raw = get_setting(month_key, "{}")
+        try:
+            counts = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            counts = {}
+        if not isinstance(counts, dict):
+            counts = {}
+        counts[category] = int(counts.get(category, 0)) + 1
+        set_setting(month_key, json.dumps(counts, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def get_ai_usage_this_month():
+    """이번 달 AI 사용 횟수를 {"text": n, "image": n, "audio": n} 형태로 돌려줍니다."""
+    month_key = f"ai_usage_{datetime.utcnow().strftime('%Y-%m')}"
+    raw = get_setting(month_key, "{}")
+    try:
+        counts = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        counts = {}
+    return counts if isinstance(counts, dict) else {}
+
+
 def openai_client():
     api_key = os.getenv("OPENAI_API_KEY")
+
     if not api_key:
         raise RuntimeError("Render 환경변수에 OPENAI_API_KEY가 없습니다.")
+
     return OpenAI(api_key=api_key)
 
 
@@ -210,6 +346,7 @@ def generate_article(keyword, brand_style, article_type, length, audience, notes
         model=OPENAI_MODEL,
         input=prompt
     )
+    log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
     try:
         data = json.loads(raw)
@@ -283,18 +420,1883 @@ Do not render the Korean headline inside the image. The web app overlays this te
 
 
 def generate_thumbnail(article, style, thumbnail_text):
+    
     result = openai_client().images.generate(
         model=IMAGE_MODEL,
         prompt=image_prompt(article, style, thumbnail_text),
         size="1536x1024",
         quality="medium"
     )
+    log_ai_usage("image")
     image_b64 = result.data[0].b64_json
     if not image_b64:
         raise RuntimeError("이미지 데이터가 반환되지 않았습니다.")
     filename = f"article_{article.id}_{int(datetime.utcnow().timestamp())}.png"
     (MEDIA_DIR / filename).write_bytes(base64.b64decode(image_b64))
     return filename
+
+
+
+def copy_media_file(source_filename, prefix):
+    if not source_filename:
+        return None
+
+    source_path = MEDIA_DIR / source_filename
+
+    if not source_path.exists():
+        return None
+
+    extension = source_path.suffix.lower() or ".png"
+    target_filename = (
+        f"{prefix}_{int(datetime.utcnow().timestamp())}"
+        f"_{secrets.token_hex(3)}{extension}"
+    )
+    target_path = MEDIA_DIR / target_filename
+    shutil.copy2(source_path, target_path)
+    return target_filename
+
+
+def delete_media_if_exists(filename):
+    if not filename:
+        return
+
+    path = MEDIA_DIR / filename
+
+    if path.exists():
+        path.unlink()
+
+
+def preset_profile(preset):
+    try:
+        data = json.loads(preset.profile_json or "{}")
+    except json.JSONDecodeError:
+        return default_instatoon_character_profile()
+
+    if not isinstance(data, dict):
+        return default_instatoon_character_profile()
+
+    default_profile = default_instatoon_character_profile()
+
+    for key, value in default_profile.items():
+        if not str(data.get(key, "")).strip():
+            data[key] = value
+
+    return data
+
+
+def extract_latest_instatoon_text(article):
+    notes = article.notes or ""
+    marker = "🎨 인스타툰 8컷"
+    if marker not in notes:
+        return ""
+    return notes.rsplit(marker, 1)[1].strip()
+
+
+def normalize_instatoon_cuts(instatoon_text):
+    """최신 인스타툰에서 컷 번호 1~8만 한 번씩 반환합니다."""
+    numbered = {}
+
+    for chunk in (instatoon_text or "").split("[CUT]"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+
+        match = re.search(r"컷\s*번호\s*:\s*(\d+)", chunk)
+        if not match:
+            continue
+
+        number = int(match.group(1))
+        if 1 <= number <= 8:
+            numbered[number] = re.sub(
+                r"컷\s*번호\s*:\s*\d+",
+                f"컷 번호: {number}",
+                chunk,
+                count=1,
+            )
+
+    return [numbered[n] for n in range(1, 9) if n in numbered]
+
+
+def canonical_instatoon_text(article):
+    cuts = normalize_instatoon_cuts(extract_latest_instatoon_text(article))
+    return "\n\n".join(f"[CUT]\n{cut}" for cut in cuts)
+
+
+def default_instatoon_character_profile():
+    return {
+        "project_name": "말썽쟁이 딸랑구",
+        "mother_name": "엄마",
+        "mother_appearance": (
+            "한국인 30대 후반 여성, 부드러운 둥근 얼굴, "
+            "따뜻한 갈색 단발 보브컷과 옆가르마, 주황색 니트, 크림색 바지"
+        ),
+        "daughter_name": "딸",
+        "daughter_appearance": (
+            "한국인 초등학생 여자아이, 둥근 어린이 얼굴, "
+            "진한 갈색 양 갈래 낮은 묶음머리, 노란 긴팔 상의, 주황색 치마"
+        ),
+        "art_style": (
+            "따뜻한 한국 웹툰 일러스트, 부드러운 베이지·주황 팔레트, "
+            "둥글고 깔끔한 선, 은은한 종이 질감"
+        ),
+        "location_style": "아늑하고 단순한 한국 가정집 실내",
+        "negative_rules": (
+            "글자, 숫자, 말풍선, 자막, 로고, 워터마크, 간판, UI, "
+            "사진풍, 3D 렌더 금지"
+        ),
+        "caption_style": "큰 말풍선+하단자막",
+        "caption_font_size": "58",
+        "subtitle_font_size": "62",
+        "reference_priority": "업로드 이미지 최우선",
+    }
+
+
+def get_instatoon_character_profile(article):
+    default_profile = default_instatoon_character_profile()
+
+    try:
+        saved = json.loads(article.instatoon_character_profile or "{}")
+    except json.JSONDecodeError:
+        saved = {}
+
+    if not isinstance(saved, dict):
+        saved = {}
+
+    for key, value in default_profile.items():
+        if not str(saved.get(key, "")).strip():
+            saved[key] = value
+
+    return saved
+
+
+def instatoon_scene_only(cut_text):
+    """이미지 모델에는 장면 설명만 전달하고 대사·자막은 제외합니다."""
+    lines = []
+
+    for raw_line in (cut_text or "").splitlines():
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        if line.startswith(("대사:", "자막:", "컷 번호:")):
+            continue
+
+        if line.startswith("장면:"):
+            line = line.split(":", 1)[1].strip()
+
+        if line:
+            lines.append(line)
+
+    return " ".join(lines)[:1200] or "엄마와 딸이 자연스럽게 상호작용하는 장면"
+
+
+
+def parse_instatoon_cut_fields(cut_text):
+    fields = {
+        "cut_number": "",
+        "scene": "",
+        "dialogue": "",
+        "caption": "",
+    }
+
+    current_key = None
+    key_map = {
+        "컷 번호": "cut_number",
+        "장면": "scene",
+        "대사": "dialogue",
+        "자막": "caption",
+    }
+    # 위 4개 라벨 외에, AI가 오타/변형된 라벨(예: '자작:', '설명:')을 출력해도
+    # 이전 필드(특히 대사)에 그대로 이어붙지 않도록 걸러내는 패턴입니다.
+    unknown_label_pattern = re.compile(r"^[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,9}:\s*")
+
+    for raw_line in (cut_text or "").splitlines():
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        matched = False
+
+        for label, key in key_map.items():
+            prefix = f"{label}:"
+
+            if line.startswith(prefix):
+                fields[key] = line.split(":", 1)[1].strip()
+                current_key = key
+                matched = True
+                break
+
+        if matched:
+            continue
+
+        if unknown_label_pattern.match(line):
+            # 알려진 4개 라벨이 아닌 "무언가: 내용" 형태는 오염된 필드명일 가능성이
+            # 높으므로, 직전 필드에 붙이지 않고 통째로 버립니다.
+            continue
+
+        if current_key:
+            fields[current_key] = (
+                f"{fields[current_key]} {line}".strip()
+            )
+
+    return fields
+
+
+def get_korean_font(size, bold=True):
+    """한글이 이미지에 안 보이는 문제의 대부분은 서버(컨테이너)에 한글 폰트가
+    아예 설치되어 있지 않아서 발생합니다. Pillow의 기본 폰트(load_default)는
+    아주 작은 영문 비트맵 폰트라 한글 자체를 그리지 못해 글씨가 안 보이거나
+    네모(tofu)만 보이게 됩니다. 그래서 정확한 파일명 몇 개만 보는 대신,
+    폰트 폴더 전체를 뒤져서 한글 폰트로 보이는 파일을 최대한 찾아봅니다.
+    """
+    exact_candidates = [
+        (
+            "/usr/share/fonts/truetype/nanum/"
+            + ("NanumBarunGothicBold.ttf" if bold else "NanumBarunGothic.ttf")
+        ),
+        (
+            "/usr/share/fonts/opentype/noto/"
+            + ("NotoSansCJK-Bold.ttc" if bold else "NotoSansCJK-Regular.ttc")
+        ),
+        "/usr/share/fonts/truetype/unfonts-core/UnDotum.ttf",
+        # 프로젝트에 폰트 파일을 직접 넣어두는 경우(운영 환경에 가장 안전한 방식)
+        str(BASE_DIR / "static" / "fonts" / "NanumBarunGothicBold.ttf"),
+        str(BASE_DIR / "static" / "fonts" / "NotoSansKR-Bold.ttf"),
+    ]
+
+    for font_path in exact_candidates:
+        path = Path(font_path)
+        if path.exists():
+            return ImageFont.truetype(str(font_path), size=size)
+
+    # 정확한 파일명을 못 찾았으면, 시스템에 설치된 폰트 폴더 전체에서
+    # 이름에 한글 폰트로 흔히 쓰이는 이름이 들어간 파일을 찾아봅니다.
+    keyword = "bold" if bold else "regular"
+    fallback_match = None
+    for fonts_root in ("/usr/share/fonts", "/usr/local/share/fonts"):
+        root = Path(fonts_root)
+        if not root.exists():
+            continue
+        for font_file in root.rglob("*"):
+            if font_file.suffix.lower() not in (".ttf", ".ttc", ".otf"):
+                continue
+            name = font_file.name.lower()
+            if any(tag in name for tag in ("nanum", "noto", "cjk", "gothic", "malgun")):
+                if keyword in name:
+                    return ImageFont.truetype(str(font_file), size=size)
+                if fallback_match is None:
+                    fallback_match = font_file
+
+    if fallback_match:
+        return ImageFont.truetype(str(fallback_match), size=size)
+
+    # 한글 폰트를 정말 하나도 못 찾은 경우: 여기서 조용히 영문 기본 폰트로
+    # 넘어가면 이미지에 글씨가 안 보이는 채로 계속 나오니, 원인을 바로
+    # 알 수 있도록 명확한 에러로 알려줍니다.
+    raise RuntimeError(
+        "서버에 한글 폰트가 설치되어 있지 않아 이미지에 글씨를 넣을 수 없습니다. "
+        "터미널에서 `sudo apt-get update && sudo apt-get install -y fonts-nanum` "
+        "실행 후 다시 이미지를 생성해 주세요. (Codespace를 새로 만들면 다시 설치해야 "
+        "할 수 있으니, 가능하면 폰트 파일을 static/fonts/ 폴더에 직접 넣어두는 것을 "
+        "추천합니다.)"
+    )
+
+
+def wrap_text_pixels(draw, text, font, max_width):
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+
+    if not text:
+        return []
+
+    lines = []
+    current = ""
+
+    for char in text:
+        candidate = current + char
+        bbox = draw.textbbox((0, 0), candidate, font=font)
+
+        if bbox[2] - bbox[0] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = char
+
+    if current:
+        lines.append(current)
+
+    return lines
+
+
+def compose_instatoon_text_overlay(
+    article,
+    cut_number,
+    source_filename,
+    cut_text,
+):
+    profile = get_instatoon_character_profile(article)
+    fields = parse_instatoon_cut_fields(cut_text)
+    source_path = MEDIA_DIR / source_filename
+
+    if not source_path.exists():
+        raise FileNotFoundError(
+            f"원본 인스타툰 이미지를 찾을 수 없습니다: {source_filename}"
+        )
+
+    image = Image.open(source_path).convert("RGB")
+    width, height = image.size
+    draw = ImageDraw.Draw(image, "RGBA")
+    margin = max(28, width // 30)
+
+    try:
+        dialogue_size = max(54, min(int(profile.get("caption_font_size", "64")), 82))
+    except (TypeError, ValueError):
+        dialogue_size = 64
+
+    try:
+        subtitle_size = max(58, min(int(profile.get("subtitle_font_size", "68")), 88))
+    except (TypeError, ValueError):
+        subtitle_size = 68
+
+    dialogue_font = get_korean_font(dialogue_size, bold=True)
+    subtitle_font = get_korean_font(subtitle_size, bold=True)
+
+    turns = parse_dialogue_turns(fields.get("dialogue", ""))[:2]
+    caption = str(fields.get("caption", "") or "").strip()
+    caption = re.split(
+        r"(?:장면|대사|설명|컷\s*번호)\s*:",
+        caption,
+        maxsplit=1,
+    )[0].strip()
+
+    # 말풍선 꼬리가 배경(곰인형 등)을 잘못 가리키는 문제가 있어,
+    # AI 얼굴 위치 감지는 더 이상 사용하지 않습니다. 대신 왼쪽/오른쪽
+    # 위치 구분만으로 누가 말하는지 표시합니다.
+    bubble_y = margin
+    max_bubble_width = width - margin * 2
+
+    for index, turn in enumerate(turns):
+        lines = wrap_text_pixels(
+            draw,
+            turn.get("text", ""),
+            dialogue_font,
+            width - margin * 5,
+        )[:3]
+
+        if not lines:
+            continue
+
+        box = draw.textbbox((0, 0), "가나다ABC", font=dialogue_font)
+        line_height = box[3] - box[1] + 14
+        # 말하는 사람 이름(엄마/딸) 텍스트를 더는 표시하지 않으므로,
+        # 말풍선 위아래 여백을 대칭으로 맞춰 더 아담하게 만듭니다.
+        bubble_height = 30 + len(lines) * line_height + 26
+
+        # 글씨 실제 폭에 맞춰 말풍선 가로 크기를 정합니다. (예전에는 항상
+        # 화면 폭 가득 채운 큰 박스라 짧은 대사도 얼굴을 가렸습니다.)
+        text_widths = [
+            draw.textbbox((0, 0), line, font=dialogue_font)[2]
+            for line in lines
+        ]
+        content_width = max(text_widths, default=0)
+        bubble_width = min(max_bubble_width, content_width + 60)
+        bubble_width = max(bubble_width, 140)  # 너무 작아지지 않도록 최소 폭 보장
+
+        speaker = turn.get("speaker", "")
+        # 순서(index)가 아니라 "누가 말하는지"로 방향을 고정합니다.
+        # 엄마는 항상 왼쪽, 딸은 항상 오른쪽으로 말풍선이 펼쳐지고,
+        # 그 외 캐릭터(나레이션 등)는 순서대로 번갈아 배치합니다.
+        if speaker == "mother":
+            side_left = True
+        elif speaker == "daughter":
+            side_left = False
+        else:
+            side_left = (index % 2 == 0)
+
+        if not side_left:
+            right = width - margin - (width // 14)
+            left = max(margin, right - bubble_width)
+        else:
+            left = margin
+            right = min(width - margin, left + bubble_width)
+
+        # 매끈한(대화용) 구름 모양 말풍선을 그립니다. wobble_amplitude를
+        # 0보다 크게 주면 톱니처럼 삐죽삐죽한(생각용) 모양이 됩니다 —
+        # 지금은 "생각" 대사를 구분할 표시가 따로 없어서 항상 매끈한
+        # 모양(대화)을 사용합니다.
+        wobble_amplitude = 0.0
+        cx = (left + right) / 2
+        cy = bubble_y + bubble_height / 2
+        rx = (right - left) / 2 * 1.16
+        ry = bubble_height / 2 * 1.32
+        bump_count = max(10, min(20, int((bubble_width + bubble_height) / 34)))
+        bubble_points = []
+        steps_per_bump = 8
+        total_steps = bump_count * steps_per_bump
+        for step in range(total_steps):
+            angle = 2 * math.pi * step / total_steps
+            wobble = 1 + wobble_amplitude * math.sin(bump_count * angle)
+            bubble_points.append(
+                (cx + rx * wobble * math.cos(angle), cy + ry * wobble * math.sin(angle))
+            )
+
+        draw.polygon(
+            bubble_points,
+            fill=(255, 255, 255, 208),
+            outline=(32, 32, 32, 230),
+            width=4,
+        )
+
+        text_y = bubble_y + 27
+        for line in lines:
+            draw.text(
+                (left + 26, text_y),
+                line,
+                font=dialogue_font,
+                fill=(20, 20, 20, 255),
+            )
+            text_y += line_height
+
+        bubble_y += bubble_height + int(ry * 0.7) + 26
+
+    if caption:
+        lines = wrap_text_pixels(
+            draw,
+            caption,
+            subtitle_font,
+            width - margin * 4,
+        )[:2]
+        box = draw.textbbox((0, 0), "가나다ABC", font=subtitle_font)
+        line_height = box[3] - box[1] + 16
+        band_height = max(150, len(lines) * line_height + 58)
+
+        # 자막을 그림 위에 겹쳐 그리지 않고, 그림 아래에 새로운 공간을
+        # 만들어서 그 안에 넣습니다. 그림에는 글씨가 전혀 겹치지 않습니다.
+        extended = Image.new(
+            "RGB", (width, height + band_height), (24, 21, 20)
+        )
+        extended.paste(image, (0, 0))
+        image = extended
+        extended_draw = ImageDraw.Draw(image, "RGBA")
+
+        band_top = height  # 원본 그림이 끝나는 지점부터 자막 공간 시작
+
+        text_y = band_top + (band_height - len(lines) * line_height) // 2
+        for line in lines:
+            bbox = extended_draw.textbbox((0, 0), line, font=subtitle_font)
+            text_x = (width - (bbox[2] - bbox[0])) // 2
+            extended_draw.text(
+                (text_x, text_y),
+                line,
+                font=subtitle_font,
+                fill=(255, 255, 255, 255),
+            )
+            text_y += line_height
+
+    filename = (
+        f"instatoon_{article.id}_cut_{cut_number}_captioned_"
+        f"{int(datetime.utcnow().timestamp())}.png"
+    )
+    image.save(MEDIA_DIR / filename, format="PNG", optimize=True)
+    return filename
+
+
+def load_json_map(value):
+    try:
+        data = json.loads(value or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+    return data if isinstance(data, dict) else {}
+
+
+def save_instatoon_image_versions(
+    article,
+    cut_number,
+    raw_filename,
+    cut_text,
+):
+    raw_map = load_json_map(article.instatoon_images)
+    captioned_map = load_json_map(article.instatoon_captioned_images)
+
+    old_raw = raw_map.get(str(cut_number))
+    old_captioned = captioned_map.get(str(cut_number))
+
+    captioned_filename = compose_instatoon_text_overlay(
+        article=article,
+        cut_number=cut_number,
+        source_filename=raw_filename,
+        cut_text=cut_text,
+    )
+
+    raw_map[str(cut_number)] = raw_filename
+    captioned_map[str(cut_number)] = captioned_filename
+
+    article.instatoon_images = json.dumps(
+        raw_map,
+        ensure_ascii=False,
+    )
+    article.instatoon_captioned_images = json.dumps(
+        captioned_map,
+        ensure_ascii=False,
+    )
+
+    return {
+        "old_raw": old_raw,
+        "old_captioned": old_captioned,
+        "raw_filename": raw_filename,
+        "captioned_filename": captioned_filename,
+    }
+
+
+def delete_replaced_media(*filenames):
+    for filename in filenames:
+        if not filename:
+            continue
+
+        file_path = MEDIA_DIR / filename
+
+        if file_path.exists():
+            file_path.unlink()
+
+
+
+ALLOWED_REFERENCE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def allowed_reference_image(filename):
+    return (
+        "." in (filename or "")
+        and filename.rsplit(".", 1)[1].lower() in ALLOWED_REFERENCE_EXTENSIONS
+    )
+
+
+def save_reference_image_upload(file_storage, article_id):
+    if not file_storage or not file_storage.filename:
+        raise ValueError("업로드할 이미지를 선택해 주세요.")
+
+    if not allowed_reference_image(file_storage.filename):
+        raise ValueError("PNG, JPG, JPEG, WEBP 이미지만 업로드할 수 있습니다.")
+
+    safe_name = secure_filename(file_storage.filename)
+    extension = safe_name.rsplit(".", 1)[1].lower()
+    raw_bytes = file_storage.read()
+
+    if not raw_bytes:
+        raise ValueError("업로드한 이미지가 비어 있습니다.")
+
+    if len(raw_bytes) > MAX_REFERENCE_IMAGE_BYTES:
+        raise ValueError("참조 이미지는 10MB 이하만 업로드할 수 있습니다.")
+
+    temp_filename = (
+        f"instatoon_{article_id}_reference_upload_"
+        f"{int(datetime.utcnow().timestamp())}.{extension}"
+    )
+    temp_path = MEDIA_DIR / temp_filename
+    temp_path.write_bytes(raw_bytes)
+
+    try:
+        with Image.open(temp_path) as uploaded:
+            uploaded.verify()
+
+        with Image.open(temp_path) as uploaded:
+            image = uploaded.convert("RGB")
+            image.thumbnail((1536, 1536))
+
+            final_filename = (
+                f"instatoon_{article_id}_reference_"
+                f"{int(datetime.utcnow().timestamp())}.png"
+            )
+            final_path = MEDIA_DIR / final_filename
+            image.save(final_path, format="PNG", optimize=True)
+
+    except Exception as error:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise ValueError("정상적인 이미지 파일을 업로드해 주세요.") from error
+
+    if temp_path.exists():
+        temp_path.unlink()
+
+    return final_filename
+
+
+def generate_instatoon_character_sheet(article, profile, style):
+    reference_filename = article.instatoon_reference_image
+    has_reference = bool(
+        reference_filename and (MEDIA_DIR / reference_filename).exists()
+    )
+
+    if has_reference:
+        prompt = f"""
+Create a clean square production model sheet using the exact recurring cast
+from the uploaded reference image.
+
+PROJECT:
+{profile.get("project_name", "인스타툰 프로젝트")}
+
+STYLE:
+{style}
+{profile.get("art_style", "")}
+
+STRICT RULES:
+- The uploaded image is the canonical source of identity.
+- Preserve the exact visible species and number of main characters.
+- Preserve face, eyes, ears, muzzle or nose, fur or skin color,
+  hairstyle, body proportions, clothing, accessories, and palette.
+- Never turn animals into humans.
+- Show front, three-quarter, side, and full-body views.
+- Plain warm light background.
+- No text, labels, numbers, logos, or watermarks.
+- Square 1:1 composition.
+"""
+        with open(MEDIA_DIR / reference_filename, "rb") as reference_file:
+            result = openai_client().images.edit(
+                model=IMAGE_MODEL,
+                image=reference_file,
+                prompt=prompt,
+                size="1024x1024",
+                quality="medium",
+                input_fidelity="high",
+            )
+    else:
+        prompt = f"""
+Create a clean square Korean webtoon character model sheet.
+
+MOTHER:
+{profile.get("mother_name", "엄마")}
+{profile.get("mother_appearance", "")}
+
+DAUGHTER:
+{profile.get("daughter_name", "딸")}
+{profile.get("daughter_appearance", "")}
+
+STYLE:
+{style}
+{profile.get("art_style", "")}
+
+Show front, three-quarter, side, and full-body views.
+No text, labels, numbers, logos, or watermarks.
+Square 1:1 composition.
+"""
+        result = openai_client().images.generate(
+            model=IMAGE_MODEL,
+            prompt=prompt,
+            size="1024x1024",
+            quality="medium",
+        )
+
+    log_ai_usage("image")
+    image_b64 = result.data[0].b64_json
+    if not image_b64:
+        raise RuntimeError("캐릭터 시트 이미지 데이터가 반환되지 않았습니다.")
+
+    filename = (
+        f"instatoon_{article.id}_character_sheet_"
+        f"{int(datetime.utcnow().timestamp())}.png"
+    )
+    (MEDIA_DIR / filename).write_bytes(base64.b64decode(image_b64))
+    return filename
+
+
+def generate_instatoon_image(
+    article,
+    cut_number,
+    cut_text,
+    style,
+    expression_hint="",
+):
+    profile = get_instatoon_character_profile(article)
+    scene_description = instatoon_scene_only(cut_text)
+    expression_hint = (expression_hint or "").strip()
+    reference_filename = article.instatoon_reference_image
+    has_reference = bool(
+        reference_filename and (MEDIA_DIR / reference_filename).exists()
+    )
+
+    prompt = f"""
+Create panel {cut_number} of one continuous 8-panel Instagram webtoon.
+
+SCENE:
+{scene_description}
+
+EXPRESSION:
+{expression_hint or "Follow the emotion in the scene."}
+
+STYLE:
+{style}
+{profile.get("art_style", "")}
+Location mood: {profile.get("location_style", "")}
+
+ZERO-TEXT RULE:
+- No text, letters, numbers, captions, signs, logos, watermarks,
+  speech bubbles, or title cards.
+- Tell the story only through pose, expression, props, framing, and setting.
+- Leave the top 30 percent visually calm and uncluttered (plain background,
+  sky, wall, etc.) — dialogue bubbles are added there afterward and must
+  not cover any character's face.
+- Keep character faces centered in the middle band of the frame, not at
+  the very top edge.
+- Leave the lower 22 percent visually calm for captions.
+- Portrait 2:3 composition (close to the 9:16 Instagram Reels/Story frame).
+- {profile.get("negative_rules", "")}
+"""
+
+    if has_reference:
+        prompt += """
+UPLOADED IMAGE IS THE ONLY CANONICAL CAST:
+- Preserve the exact species and number of recurring characters.
+- Preserve face, eye shape, ears, muzzle or nose, fur or skin color,
+  hairstyle, body proportions, clothing, accessories, and palette.
+- Never turn animals into humans.
+- Never replace the uploaded cast with generic people.
+- Change only pose, expression, camera angle, props, and setting.
+"""
+        with open(MEDIA_DIR / reference_filename, "rb") as reference_file:
+            result = openai_client().images.edit(
+                model=IMAGE_MODEL,
+                image=reference_file,
+                prompt=prompt,
+                size="1024x1536",
+                quality="medium",
+                input_fidelity="high",
+            )
+    else:
+        prompt += f"""
+LOCKED WRITTEN CAST:
+Mother: {profile.get("mother_name", "엄마")},
+{profile.get("mother_appearance", "")}
+Daughter: {profile.get("daughter_name", "딸")},
+{profile.get("daughter_appearance", "")}
+Keep faces, hair, outfits, palette, and proportions identical in all panels.
+"""
+        result = openai_client().images.generate(
+            model=IMAGE_MODEL,
+            prompt=prompt,
+            size="1024x1536",
+            quality="medium",
+        )
+
+    log_ai_usage("image")
+    image_b64 = result.data[0].b64_json
+    if not image_b64:
+        raise RuntimeError("인스타툰 이미지 데이터가 반환되지 않았습니다.")
+
+    filename = (
+        f"instatoon_{article.id}_cut_{cut_number}_"
+        f"{int(datetime.utcnow().timestamp())}.png"
+    )
+    (MEDIA_DIR / filename).write_bytes(base64.b64decode(image_b64))
+    return filename
+
+
+TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+TTS_VOICES = {
+    "mother": "coral",
+    "daughter": "nova",
+    "narration": "sage",
+}
+
+
+def clean_dialogue_text(value):
+    text_value = str(value or "")
+    text_value = re.split(r"(?:장면|자막|설명|컷\s*번호)\s*:", text_value, maxsplit=1)[0]
+    text_value = re.sub(r'["“”‘’]', "", text_value)
+    text_value = re.sub(r"\s+", " ", text_value).strip()
+    return text_value[:1000]
+
+
+def parse_dialogue_turns(dialogue):
+    """명시된 화자 뒤의 대사만 추출합니다."""
+    raw = str(dialogue or "").strip()
+    if not raw:
+        return []
+
+    raw = re.split(
+        r"(?:장면|자막|설명|컷\s*번호)\s*:",
+        raw,
+        maxsplit=1,
+    )[0].strip()
+
+    pattern = re.compile(
+        r"(엄마|어머니|딸|아이|딸아이|친구|아빠|아버지|"
+        r"여우|곰|토끼|고양이|강아지|나레이션|내레이션)"
+        r"\s*:\s*"
+    )
+    matches = list(pattern.finditer(raw))
+    if not matches:
+        return []
+
+    turns = []
+
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
+        label = match.group(1)
+        text_value = raw[start:end]
+        text_value = re.split(
+            r"(?:장면|자막|설명|컷\s*번호)\s*:",
+            text_value,
+            maxsplit=1,
+        )[0]
+        # 위 4개 라벨 외에도 AI가 오타/변형된 라벨(예: '자작:')을 이어붙이는 경우가
+        # 있어, "짧은 텍스트 + 콜론" 패턴이 다시 나오면 그 지점에서 대사를 끊습니다.
+        text_value = re.split(
+            r"[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,9}:\s*", text_value, maxsplit=1
+        )[0]
+        text_value = re.sub(r'["“”‘’]', "", text_value)
+        text_value = re.sub(r"\s+", " ", text_value).strip(" ,./")
+
+        if not text_value:
+            continue
+
+        if label in {"엄마", "어머니"}:
+            speaker, display = "mother", "엄마"
+        elif label in {"딸", "아이", "딸아이"}:
+            speaker, display = "daughter", "딸"
+        elif label in {"나레이션", "내레이션"}:
+            speaker, display = "narration", "나레이션"
+        else:
+            speaker, display = "narration", label
+
+        turns.append({
+            "speaker": speaker,
+            "label": display,
+            "text": text_value[:700],
+        })
+
+    return turns
+
+
+def tts_instructions_for(speaker, mood="자연스럽게"):
+    mood = clean_dialogue_text(mood) or "자연스럽게"
+
+    if speaker == "mother":
+        return (
+            "Speak in Korean as a warm, natural mother in her late thirties. "
+            "Use clear diction, conversational pacing, gentle emotional acting, "
+            f"and this mood: {mood}. Do not sound like an announcer."
+        )
+
+    if speaker == "daughter":
+        return (
+            "Speak in Korean as a bright elementary-school girl character. "
+            "Use lively but understandable delivery, youthful energy, "
+            f"and this mood: {mood}. Avoid exaggerated baby talk."
+        )
+
+    return (
+        "Speak in Korean as a friendly webtoon narrator. "
+        "Use clear, warm storytelling delivery and natural pacing. "
+        f"Mood: {mood}."
+    )
+
+
+def generate_tts_mp3(text_value, speaker, article_id, cut_number, turn_number, mood):
+    text_value = clean_dialogue_text(text_value)
+
+    if not text_value:
+        raise ValueError("음성으로 만들 대사가 없습니다.")
+
+    voice = TTS_VOICES.get(speaker, TTS_VOICES["narration"])
+    filename = (
+        f"article_{article_id}_cut_{cut_number}_"
+        f"{speaker}_{turn_number}_{int(datetime.utcnow().timestamp())}.mp3"
+    )
+    output_path = MEDIA_DIR / filename
+
+    with openai_client().audio.speech.with_streaming_response.create(
+        model=TTS_MODEL,
+        voice=voice,
+        input=text_value,
+        instructions=tts_instructions_for(speaker, mood),
+        response_format="mp3",
+        speed=1.0,
+    ) as response:
+        response.stream_to_file(output_path)
+
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        raise RuntimeError("음성 파일 생성에 실패했습니다.")
+
+    log_ai_usage("audio")
+    return filename
+
+
+def get_instatoon_cuts(article):
+    return normalize_instatoon_cuts(extract_latest_instatoon_text(article))
+
+
+def generate_cut_audio(article, cut_number, mother_mood, daughter_mood, narration_mood):
+    cuts = get_instatoon_cuts(article)
+
+    if cut_number < 1 or cut_number > len(cuts):
+        raise ValueError("선택한 인스타툰 컷을 찾을 수 없습니다.")
+
+    fields = parse_instatoon_cut_fields(cuts[cut_number - 1])
+    turns = parse_dialogue_turns(fields.get("dialogue", ""))
+
+    if not turns:
+        raise ValueError("이 컷에는 엄마: 또는 딸: 형식의 대사가 없습니다.")
+
+    audio_map = load_json_map(article.instatoon_audio)
+    old_entries = audio_map.get(str(cut_number), [])
+    new_entries = []
+
+    moods = {
+        "mother": mother_mood,
+        "daughter": daughter_mood,
+        "narration": narration_mood,
+    }
+
+    for turn_number, turn in enumerate(turns, start=1):
+        filename = generate_tts_mp3(
+            text_value=turn["text"],
+            speaker=turn["speaker"],
+            article_id=article.id,
+            cut_number=cut_number,
+            turn_number=turn_number,
+            mood=moods.get(turn["speaker"], "자연스럽게"),
+        )
+
+        new_entries.append({
+            "turn_number": turn_number,
+            "speaker": turn["speaker"],
+            "label": turn["label"],
+            "text": turn["text"],
+            "filename": filename,
+        })
+
+    audio_map[str(cut_number)] = new_entries
+    article.instatoon_audio = json.dumps(
+        audio_map,
+        ensure_ascii=False,
+    )
+
+    return old_entries, new_entries
+
+
+def delete_audio_entries(entries):
+    for entry in entries or []:
+        filename = entry.get("filename") if isinstance(entry, dict) else None
+
+        if not filename:
+            continue
+
+        file_path = MEDIA_DIR / filename
+
+        if file_path.exists():
+            file_path.unlink()
+
+
+
+
+ALLOWED_BGM_EXTENSIONS = {"mp3", "wav", "m4a", "aac", "ogg"}
+MAX_BGM_BYTES = 25 * 1024 * 1024
+
+
+
+def safe_zip_name(value, fallback="content"):
+    value = re.sub(r"[^\w가-힣\-]+", "_", (value or "").strip())
+    value = value.strip("_")
+    return value[:80] or fallback
+
+
+def write_text_file(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content or "", encoding="utf-8")
+
+
+def build_export_manifest(article):
+    audio_map = load_json_map(article.instatoon_audio)
+    captioned_map = load_json_map(article.instatoon_captioned_images)
+    raw_map = load_json_map(article.instatoon_images)
+
+    return {
+        "article_id": article.id,
+        "title": article.title,
+        "keyword": article.keyword,
+        "created_at": (
+            article.created_at.isoformat()
+            if article.created_at else None
+        ),
+        "files": {
+            "thumbnail": article.thumbnail_path,
+            "character_sheet": article.instatoon_character_sheet,
+            "reference_image": article.instatoon_reference_image,
+            "captioned_images": captioned_map,
+            "raw_images": raw_map,
+            "audio": audio_map,
+            "reels": article.reels_path,
+            "reels_voice": article.reels_voice_path,
+            "reels_final": article.reels_final_path,
+            "bgm": article.reels_bgm_path,
+        },
+        "settings": {
+            "character_profile": load_json_map(
+                article.instatoon_character_profile
+            ),
+            "audio_settings": load_json_map(
+                article.instatoon_audio_settings
+            ),
+            "reels_settings": load_json_map(article.reels_settings),
+            "reels_voice_settings": load_json_map(
+                article.reels_voice_settings
+            ),
+            "reels_final_settings": load_json_map(
+                article.reels_final_settings
+            ),
+        },
+    }
+
+
+def create_export_package(article, include_raw=True, include_audio=True):
+    timestamp = int(datetime.utcnow().timestamp())
+    slug = safe_zip_name(article.title, fallback=f"article_{article.id}")
+    filename = f"{slug}_content_package_{timestamp}.zip"
+    output_path = MEDIA_DIR / filename
+
+    manifest = build_export_manifest(article)
+
+    with tempfile.TemporaryDirectory(prefix="mi_export_") as temp_dir:
+        root = Path(temp_dir) / slug
+        root.mkdir(parents=True, exist_ok=True)
+
+        # 기본 텍스트 콘텐츠
+        write_text_file(root / "01_blog" / "title.txt", article.title)
+        write_text_file(
+            root / "01_blog" / "meta_description.txt",
+            article.meta_description,
+        )
+        write_text_file(root / "01_blog" / "body.html", article.body_html)
+        write_text_file(root / "01_blog" / "tags.txt", article.tags)
+
+        write_text_file(
+            root / "02_sns" / "instagram_caption.txt",
+            article.instagram_caption,
+        )
+        write_text_file(
+            root / "02_sns" / "threads.txt",
+            article.threads_text,
+        )
+        write_text_file(
+            root / "02_sns" / "shorts_script.txt",
+            article.shorts_script,
+        )
+
+        # 인스타툰 원문
+        instatoon_text = ""
+        if "🎨 인스타툰 8컷" in (article.notes or ""):
+            instatoon_text = (
+                article.notes
+                .split("🎨 인스타툰 8컷", 1)[1]
+                .strip()
+            )
+
+        write_text_file(
+            root / "03_instatoon" / "instatoon_script.txt",
+            instatoon_text,
+        )
+
+        # 이미지
+        captioned_map = load_json_map(article.instatoon_captioned_images)
+        raw_map = load_json_map(article.instatoon_images)
+
+        for cut_number in range(1, 9):
+            captioned = captioned_map.get(str(cut_number))
+            if captioned and (MEDIA_DIR / captioned).exists():
+                destination=root / "03_instatoon" / "final_images" / f"cut_{cut_number:02d}.png"
+                destination.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copy2(MEDIA_DIR / captioned,destination)
+
+            raw = raw_map.get(str(cut_number))
+            if (
+                include_raw
+                and raw
+                and (MEDIA_DIR / raw).exists()
+            ):
+                destination=root / "03_instatoon" / "raw_images" / f"cut_{cut_number:02d}.png"
+                destination.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copy2(MEDIA_DIR / raw,destination)
+
+        # 대표 이미지와 참조 이미지
+        media_items = [
+            (
+                article.thumbnail_path,
+                root / "04_assets" / "thumbnail.png",
+            ),
+            (
+                article.instatoon_character_sheet,
+                root / "04_assets" / "character_sheet.png",
+            ),
+            (
+                article.instatoon_reference_image,
+                root / "04_assets" / "reference_image.png",
+            ),
+        ]
+
+        for source_filename, destination in media_items:
+            if (
+                source_filename
+                and (MEDIA_DIR / source_filename).exists()
+            ):
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(MEDIA_DIR / source_filename, destination)
+
+        # 오디오
+        if include_audio:
+            audio_map = load_json_map(article.instatoon_audio)
+
+            for cut_number, entries in audio_map.items():
+                for entry in entries or []:
+                    source_filename = entry.get("filename")
+                    turn_number = entry.get("turn_number", 1)
+                    speaker = safe_zip_name(
+                        entry.get("label", "voice"),
+                        fallback="voice",
+                    )
+
+                    if (
+                        source_filename
+                        and (MEDIA_DIR / source_filename).exists()
+                    ):
+                        destination = (
+                            root / "05_audio"
+                            / f"cut_{int(cut_number):02d}"
+                            / f"{int(turn_number):02d}_{speaker}.mp3"
+                        )
+                        destination.parent.mkdir(
+                            parents=True,
+                            exist_ok=True,
+                        )
+                        shutil.copy2(
+                            MEDIA_DIR / source_filename,
+                            destination,
+                        )
+
+        # 영상
+        video_items = [
+            (
+                article.reels_path,
+                root / "06_video" / "reels_basic.mp4",
+            ),
+            (
+                article.reels_voice_path,
+                root / "06_video" / "reels_with_voice.mp4",
+            ),
+            (
+                article.reels_final_path,
+                root / "06_video" / "reels_final.mp4",
+            ),
+        ]
+
+        for source_filename, destination in video_items:
+            if (
+                source_filename
+                and (MEDIA_DIR / source_filename).exists()
+            ):
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(MEDIA_DIR / source_filename, destination)
+
+        # 매니페스트와 사용 안내
+        write_text_file(
+            root / "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+        )
+
+        readme = f"""MI Creator OS 콘텐츠 패키지
+
+제목: {article.title}
+키워드: {article.keyword}
+
+폴더 구성
+01_blog      블로그 제목, 메타 설명, 본문 HTML, 태그
+02_sns       인스타그램, Threads, 쇼츠 대본
+03_instatoon 인스타툰 원문, 최종 이미지, 글씨 없는 원본
+04_assets    썸네일, 캐릭터 시트, 참조 이미지
+05_audio     컷별 엄마·딸·나레이션 MP3
+06_video     기본 릴스, 음성 릴스, 최종 릴스
+
+주의
+- 업로드 전 문구와 이미지 내용을 직접 확인하세요.
+- BGM과 참조 이미지는 사용 권한이 있는 파일만 사용하세요.
+"""
+        write_text_file(root / "README.txt", readme)
+
+        with zipfile.ZipFile(
+            output_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            for file_path in root.rglob("*"):
+                if file_path.is_file():
+                    archive.write(
+                        file_path,
+                        file_path.relative_to(root.parent),
+                    )
+
+    return filename, {
+        "include_raw": bool(include_raw),
+        "include_audio": bool(include_audio),
+        "title": article.title,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+
+
+def allowed_bgm_file(filename):
+    return (
+        "." in (filename or "")
+        and filename.rsplit(".", 1)[1].lower() in ALLOWED_BGM_EXTENSIONS
+    )
+
+
+def save_bgm_upload(file_storage, article_id):
+    if not file_storage or not file_storage.filename:
+        raise ValueError("업로드할 BGM 파일을 선택해 주세요.")
+
+    if not allowed_bgm_file(file_storage.filename):
+        raise ValueError("MP3, WAV, M4A, AAC, OGG 파일만 업로드할 수 있습니다.")
+
+    safe_name = secure_filename(file_storage.filename)
+    extension = safe_name.rsplit(".", 1)[1].lower()
+    raw_bytes = file_storage.read()
+
+    if not raw_bytes:
+        raise ValueError("업로드한 BGM 파일이 비어 있습니다.")
+
+    if len(raw_bytes) > MAX_BGM_BYTES:
+        raise ValueError("BGM 파일은 25MB 이하만 업로드할 수 있습니다.")
+
+    filename = (
+        f"article_{article_id}_bgm_"
+        f"{int(datetime.utcnow().timestamp())}.{extension}"
+    )
+    path = MEDIA_DIR / filename
+    path.write_bytes(raw_bytes)
+
+    # ffprobe가 읽을 수 있는 정상 오디오인지 확인
+    media_duration_seconds(path)
+    return filename
+
+
+def make_final_reels_with_bgm(
+    article,
+    bgm_volume=0.16,
+    voice_volume=1.0,
+    bgm_start_seconds=0.0,
+):
+    ffmpeg = ffmpeg_binary()
+
+    source_filename = article.reels_voice_path or article.reels_path
+
+    if not source_filename:
+        raise ValueError(
+            "기본 릴스 영상이 없습니다. 먼저 릴스 영상을 만들어 주세요."
+        )
+
+    if not article.reels_bgm_path:
+        raise ValueError("업로드된 BGM이 없습니다.")
+
+    source_path = MEDIA_DIR / source_filename
+    bgm_path = MEDIA_DIR / article.reels_bgm_path
+
+    if not source_path.exists():
+        raise FileNotFoundError("릴스 영상 파일을 찾을 수 없습니다.")
+
+    if not bgm_path.exists():
+        raise FileNotFoundError("BGM 파일을 찾을 수 없습니다.")
+
+    bgm_volume = safe_float(
+        bgm_volume,
+        default=0.16,
+        minimum=0.02,
+        maximum=1.0,
+    )
+    voice_volume = safe_float(
+        voice_volume,
+        default=1.0,
+        minimum=0.2,
+        maximum=2.0,
+    )
+    bgm_start_seconds = safe_float(
+        bgm_start_seconds,
+        default=0.0,
+        minimum=0.0,
+        maximum=600.0,
+    )
+
+    timestamp = int(datetime.utcnow().timestamp())
+    output_filename = (
+        f"article_{article.id}_reels_final_{timestamp}.mp4"
+    )
+    output_path = MEDIA_DIR / output_filename
+
+    # 영상에 음성이 있는지 확인
+    probe = ffprobe_binary()
+    audio_probe = subprocess.run(
+        [
+            probe,
+            "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index",
+            "-of", "csv=p=0",
+            str(source_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    source_has_audio = bool(audio_probe.stdout.strip())
+
+    if source_has_audio:
+        filter_complex = (
+            f"[0:a]volume={voice_volume:.3f},"
+            "aresample=44100,"
+            "aformat=sample_fmts=fltp:channel_layouts=stereo[voice];"
+            f"[1:a]volume={bgm_volume:.3f},"
+            "aresample=44100,"
+            "aformat=sample_fmts=fltp:channel_layouts=stereo[bgm];"
+            "[voice][bgm]amix=inputs=2:duration=first:"
+            "dropout_transition=2,alimiter=limit=0.95[outa]"
+        )
+
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i", str(source_path),
+            "-ss", f"{bgm_start_seconds:.3f}",
+            "-stream_loop", "-1",
+            "-i", str(bgm_path),
+            "-filter_complex", filter_complex,
+            "-map", "0:v:0",
+            "-map", "[outa]",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+    else:
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i", str(source_path),
+            "-ss", f"{bgm_start_seconds:.3f}",
+            "-stream_loop", "-1",
+            "-i", str(bgm_path),
+            "-filter_complex",
+            (
+                f"[1:a]volume={bgm_volume:.3f},"
+                "aresample=44100,"
+                "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                "alimiter=limit=0.95[outa]"
+            ),
+            "-map", "0:v:0",
+            "-map", "[outa]",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=420,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "최종 릴스 BGM 합성 실패: "
+            + result.stderr[-1800:]
+        )
+
+    return output_filename, {
+        "source_reels": source_filename,
+        "bgm_path": article.reels_bgm_path,
+        "bgm_volume": bgm_volume,
+        "voice_volume": voice_volume,
+        "bgm_start_seconds": bgm_start_seconds,
+        "source_has_audio": source_has_audio,
+    }
+
+
+def ffprobe_binary():
+    path = shutil.which("ffprobe")
+
+    if not path:
+        raise RuntimeError(
+            "FFprobe가 설치되어 있지 않습니다. "
+            "FFmpeg 패키지를 설치해 주세요."
+        )
+
+    return path
+
+
+def media_duration_seconds(file_path):
+    probe = ffprobe_binary()
+    result = subprocess.run(
+        [
+            probe,
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(file_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "미디어 길이를 읽지 못했습니다: "
+            + result.stderr[-800:]
+        )
+
+    try:
+        return float(result.stdout.strip())
+    except ValueError as error:
+        raise RuntimeError("미디어 길이 값이 올바르지 않습니다.") from error
+
+
+def build_cut_voice_track(
+    ffmpeg,
+    entries,
+    output_path,
+    cut_duration,
+    gap_seconds=0.18,
+):
+    valid_files = []
+
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+
+        filename = entry.get("filename")
+
+        if not filename:
+            continue
+
+        file_path = MEDIA_DIR / filename
+
+        if file_path.exists():
+            valid_files.append(file_path)
+
+    if not valid_files:
+        silence_result = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-f", "lavfi",
+                "-i", "anullsrc=r=44100:cl=stereo",
+                "-t", f"{cut_duration:.3f}",
+                "-c:a", "pcm_s16le",
+                str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+
+        if silence_result.returncode != 0:
+            raise RuntimeError(
+                "무음 오디오 생성 실패: "
+                + silence_result.stderr[-1000:]
+            )
+
+        return
+
+    input_args = []
+    filter_parts = []
+    concat_labels = []
+
+    for index, file_path in enumerate(valid_files):
+        input_args.extend(["-i", str(file_path)])
+        label = f"a{index}"
+        filter_parts.append(
+            f"[{index}:a]"
+            "aresample=44100,"
+            "aformat=sample_fmts=s16:channel_layouts=stereo,"
+            f"asetpts=N/SR/TB[{label}]"
+        )
+        concat_labels.append(f"[{label}]")
+
+    if len(valid_files) == 1:
+        filter_parts.append(
+            f"{concat_labels[0]}"
+            f"apad=pad_dur={cut_duration:.3f},"
+            f"atrim=duration={cut_duration:.3f}[outa]"
+        )
+    else:
+        joined = "".join(concat_labels)
+        filter_parts.append(
+            f"{joined}concat=n={len(valid_files)}:v=0:a=1[joined]"
+        )
+        filter_parts.append(
+            f"[joined]"
+            f"apad=pad_dur={cut_duration:.3f},"
+            f"atrim=duration={cut_duration:.3f}[outa]"
+        )
+
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            *input_args,
+            "-filter_complex", ";".join(filter_parts),
+            "-map", "[outa]",
+            "-c:a", "pcm_s16le",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "컷 음성 트랙 생성 실패: "
+            + result.stderr[-1400:]
+        )
+
+
+def make_voice_reels_video(
+    article,
+    voice_volume=1.0,
+    cut_duration_override=None,
+):
+    ffmpeg = ffmpeg_binary()
+
+    if not article.reels_path:
+        raise ValueError(
+            "기본 릴스 영상이 없습니다. 먼저 ‘릴스 만들기’를 실행해 주세요."
+        )
+
+    base_video_path = MEDIA_DIR / article.reels_path
+
+    if not base_video_path.exists():
+        raise FileNotFoundError("기본 릴스 영상 파일을 찾을 수 없습니다.")
+
+    audio_map = load_json_map(article.instatoon_audio)
+
+    if not audio_map:
+        raise ValueError(
+            "생성된 인스타툰 음성이 없습니다. 먼저 8컷 음성을 만들어 주세요."
+        )
+
+    reels_settings = load_json_map(article.reels_settings)
+    default_cut_duration = safe_float(
+        reels_settings.get("seconds_per_cut", 3.0),
+        default=3.0,
+        minimum=1.5,
+        maximum=8.0,
+    )
+
+    if cut_duration_override not in (None, ""):
+        cut_duration = safe_float(
+            cut_duration_override,
+            default=default_cut_duration,
+            minimum=1.5,
+            maximum=8.0,
+        )
+    else:
+        cut_duration = default_cut_duration
+
+    voice_volume = safe_float(
+        voice_volume,
+        default=1.0,
+        minimum=0.2,
+        maximum=2.0,
+    )
+
+    video_duration = media_duration_seconds(base_video_path)
+    cut_count = max(
+        1,
+        min(
+            8,
+            int(round(video_duration / cut_duration))
+            if cut_duration > 0
+            else 8,
+        ),
+    )
+
+    timestamp = int(datetime.utcnow().timestamp())
+    output_filename = (
+        f"article_{article.id}_reels_voice_{timestamp}.mp4"
+    )
+    output_path = MEDIA_DIR / output_filename
+
+    with tempfile.TemporaryDirectory(prefix="mi_voice_reels_") as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        cut_audio_paths = []
+
+        for cut_number in range(1, cut_count + 1):
+            cut_audio_path = (
+                temp_dir_path / f"cut_audio_{cut_number:02d}.wav"
+            )
+
+            build_cut_voice_track(
+                ffmpeg=ffmpeg,
+                entries=audio_map.get(str(cut_number), []),
+                output_path=cut_audio_path,
+                cut_duration=cut_duration,
+            )
+            cut_audio_paths.append(cut_audio_path)
+
+        concat_list = temp_dir_path / "audio_list.txt"
+        concat_list.write_text(
+            "\n".join(
+                f"file '{path.as_posix()}'"
+                for path in cut_audio_paths
+            ),
+            encoding="utf-8",
+        )
+
+        full_audio_path = temp_dir_path / "full_voice.wav"
+        concat_result = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(concat_list),
+                "-c:a", "pcm_s16le",
+                str(full_audio_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+
+        if concat_result.returncode != 0:
+            raise RuntimeError(
+                "전체 음성 트랙 합치기 실패: "
+                + concat_result.stderr[-1400:]
+            )
+
+        mux_result = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-i", str(base_video_path),
+                "-i", str(full_audio_path),
+                "-filter:a", f"volume={voice_volume:.3f}",
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-shortest",
+                "-movflags", "+faststart",
+                str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if mux_result.returncode != 0:
+            raise RuntimeError(
+                "음성 포함 릴스 생성 실패: "
+                + mux_result.stderr[-1600:]
+            )
+
+    return output_filename, {
+        "voice_volume": voice_volume,
+        "cut_duration": cut_duration,
+        "cut_count": cut_count,
+        "base_reels_path": article.reels_path,
+        "audio_model": TTS_MODEL,
+    }
+
+
+def ffmpeg_binary():
+    path = shutil.which("ffmpeg")
+
+    if not path:
+        raise RuntimeError(
+            "FFmpeg가 설치되어 있지 않습니다. "
+            "터미널에서 sudo apt-get update && sudo apt-get install -y ffmpeg 를 실행하세요."
+        )
+
+    return path
+
+
+def safe_float(value, default, minimum, maximum):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = default
+
+    return max(minimum, min(number, maximum))
+
+
+def safe_int(value, default, minimum, maximum):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+
+    return max(minimum, min(number, maximum))
+
+
+def reels_image_sequence(article):
+    captioned = load_json_map(article.instatoon_captioned_images)
+    raw = load_json_map(article.instatoon_images)
+    sequence = []
+
+    for cut_number in range(1, 9):
+        filename = captioned.get(str(cut_number)) or raw.get(str(cut_number))
+
+        if not filename:
+            continue
+
+        file_path = MEDIA_DIR / filename
+
+        if file_path.exists():
+            sequence.append((cut_number, file_path))
+
+    return sequence
+
+
+def make_reels_video(
+    article,
+    seconds_per_cut=3.0,
+    fps=30,
+    transition_seconds=0.35,
+    motion_style="교차 줌",
+):
+    ffmpeg = ffmpeg_binary()
+    sequence = reels_image_sequence(article)
+
+    if not sequence:
+        raise ValueError(
+            "릴스로 만들 인스타툰 이미지가 없습니다. "
+            "먼저 인스타툰 이미지를 생성해 주세요."
+        )
+
+    seconds_per_cut = safe_float(
+        seconds_per_cut,
+        default=3.0,
+        minimum=1.5,
+        maximum=8.0,
+    )
+    fps = safe_int(fps, default=30, minimum=24, maximum=60)
+    transition_seconds = safe_float(
+        transition_seconds,
+        default=0.35,
+        minimum=0.0,
+        maximum=1.0,
+    )
+
+    timestamp = int(datetime.utcnow().timestamp())
+    output_filename = f"article_{article.id}_reels_{timestamp}.mp4"
+    output_path = MEDIA_DIR / output_filename
+
+    with tempfile.TemporaryDirectory(prefix="mi_reels_") as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        clip_paths = []
+
+        for index, (cut_number, source_path) in enumerate(sequence):
+            clip_path = temp_dir_path / f"clip_{index:02d}.mp4"
+            total_frames = max(1, int(seconds_per_cut * fps))
+
+            selected_motion=motion_style
+            if motion_style in {"다양한 움직임","랜덤"}:
+                selected_motion=["줌인","왼쪽→오른쪽","오른쪽→왼쪽","위→아래","아래→위","대각선 이동","줌아웃","부드러운 흔들림"][index%8]
+            if selected_motion=="고정":
+                filter_chain="scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+            else:
+                if selected_motion=="교차 줌": selected_motion="줌인" if index%2==0 else "줌아웃"
+                motion_map={
+                    "줌인":("min(zoom+0.0012,1.14)","iw/2-(iw/zoom/2)","ih/2-(ih/zoom/2)"),
+                    "줌아웃":("if(eq(on,1),1.14,max(zoom-0.0012,1.0))","iw/2-(iw/zoom/2)","ih/2-(ih/zoom/2)"),
+                    "왼쪽→오른쪽":("1.10",f"(iw-iw/zoom)*on/{total_frames}","ih/2-(ih/zoom/2)"),
+                    "오른쪽→왼쪽":("1.10",f"(iw-iw/zoom)*(1-on/{total_frames})","ih/2-(ih/zoom/2)"),
+                    "위→아래":("1.10","iw/2-(iw/zoom/2)",f"(ih-ih/zoom)*on/{total_frames}"),
+                    "아래→위":("1.10","iw/2-(iw/zoom/2)",f"(ih-ih/zoom)*(1-on/{total_frames})"),
+                    "대각선 이동":("1.12",f"(iw-iw/zoom)*on/{total_frames}",f"(ih-ih/zoom)*(1-on/{total_frames})"),
+                    "부드러운 흔들림":("1.08","iw/2-(iw/zoom/2)+8*sin(on/8)","ih/2-(ih/zoom/2)+6*cos(on/10)")}
+                zoom_expr,x_expr,y_expr=motion_map.get(selected_motion,motion_map["줌인"])
+                filter_chain=("scale=1350:2400:force_original_aspect_ratio=increase,"+"zoompan="+f"z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d={total_frames}:s=1080x1920:fps={fps},setsar=1")
+
+            cmd = [
+                ffmpeg,
+                "-y",
+                "-loop", "1",
+                "-i", str(source_path),
+                "-vf", filter_chain,
+                "-t", f"{seconds_per_cut:.3f}",
+                "-r", str(fps),
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                str(clip_path),
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"CUT {cut_number} 영상 변환 실패: "
+                    + result.stderr[-1200:]
+                )
+
+            clip_paths.append(clip_path)
+
+        list_path = temp_dir_path / "clips.txt"
+        list_path.write_text(
+            "\n".join(
+                f"file '{path.as_posix()}'"
+                for path in clip_paths
+            ),
+            encoding="utf-8",
+        )
+
+        concat_cmd = [
+            ffmpeg,
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(list_path),
+            "-c", "copy",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+
+        concat_result = subprocess.run(
+            concat_cmd,
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+
+        if concat_result.returncode != 0:
+            raise RuntimeError(
+                "릴스 영상 합치기 실패: "
+                + concat_result.stderr[-1500:]
+            )
+
+    return output_filename, {
+        "seconds_per_cut": seconds_per_cut,
+        "fps": fps,
+        "transition_seconds": transition_seconds,
+        "motion_style": motion_style,
+        "cut_count": len(sequence),
+    }
 
 
 def google_client_config():
@@ -352,12 +2354,93 @@ def valid_public_url(value):
     return value
 
 
+def coupang_api_configured():
+    return bool(COUPANG_ACCESS_KEY and COUPANG_SECRET_KEY)
+
+
+def coupang_generate_hmac(method, path_with_query):
+    """쿠팡 오픈API가 요구하는 HMAC 서명을 만듭니다. 공식 가이드 방식 그대로이며,
+    Access Key/Secret Key는 쿠팡파트너스 사이트의 '오픈API' 메뉴에서 발급받습니다."""
+    path, _, query = path_with_query.partition("?")
+    signed_date = time.strftime("%y%m%d", time.gmtime()) + "T" + time.strftime("%H%M%S", time.gmtime()) + "Z"
+    message = signed_date + method + path + query
+    signature = hmac.new(
+        COUPANG_SECRET_KEY.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return (
+        f"CEA algorithm=HmacSHA256, access-key={COUPANG_ACCESS_KEY}, "
+        f"signed-date={signed_date}, signature={signature}"
+    )
+
+
+def coupang_search_products(keyword, limit=8):
+    """쿠팡파트너스 오픈API로 상품을 검색해, 제휴 링크가 이미 포함된
+    상품 목록을 돌려줍니다. API 키가 없거나 호출에 실패하면 빈 리스트를
+    반환합니다(화면에서는 '직접 입력해 주세요' 안내로 대체됩니다).
+    참고: 이 API는 파트너스 계정의 누적 판매금액이 15만원을 넘어야
+    쿠팡에서 활성화해 줍니다. 그 전까지는 키를 넣어도 계속 실패해요."""
+    if not coupang_api_configured():
+        return []
+
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return []
+
+    limit = max(1, min(int(limit or 8), 10))  # 쿠팡 검색 API는 최대 10개까지만 허용
+    path_with_query = (
+        "/v2/providers/affiliate_open_api/apis/openapi/products/search"
+        f"?keyword={quote(keyword)}&limit={limit}"
+    )
+    authorization = coupang_generate_hmac("GET", path_with_query)
+
+    req = urllib.request.Request(
+        COUPANG_API_DOMAIN + path_with_query,
+        headers={
+            "Authorization": authorization,
+            "Content-Type": "application/json;charset=UTF-8",
+        },
+        method="GET",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        # 네트워크 오류, 키 미승인(15만원 조건 미충족), 시간당 호출 제한
+        # 초과 등 어떤 이유로든 실패하면 빈 목록만 돌려주고 화면에서는
+        # 손으로 입력하는 방식으로 자연스럽게 넘어가게 합니다.
+        return []
+
+    products = (
+        payload.get("data", {}).get("productData", [])
+        if isinstance(payload, dict)
+        else []
+    )
+
+    results = []
+    for item in products:
+        if not isinstance(item, dict):
+            continue
+        results.append({
+            "name": item.get("productName", ""),
+            "price": item.get("productPrice", ""),
+            "image": item.get("productImage", ""),
+            "url": item.get("productUrl", ""),
+            "is_rocket": bool(item.get("isRocket")),
+        })
+    return results
+
+
 def build_affiliate_html(article):
     items = []
     if article.coupang_product_name and article.coupang_link:
         items.append(("쿠팡 추천", article.coupang_product_name, article.coupang_link))
     if article.atomy_product_name and article.atomy_link:
         items.append(("애터미 추천", article.atomy_product_name, article.atomy_link))
+    if article.toss_product_name and article.toss_link:
+        items.append(("토스쇼핑 추천", article.toss_product_name, article.toss_link))
     if not items:
         return ""
 
@@ -463,35 +2546,326 @@ def upsert_blogger_post(article, blog_id, mode="draft"):
 
 
 def generate_social_pack(article):
+    is_fortune_brand = "운세" in (article.brand_style or "")
+    fortune_url = os.getenv("FORTUNE_URL", "https://ai-blog-factory.onrender.com/fortune/")
+
+    cta_instruction = ""
+    if is_fortune_brand:
+        cta_instruction = f"""
+이 콘텐츠는 "오늘의 운세" 광고성 콘텐츠입니다. 아래 CTA 규칙을 반드시 지키세요.
+- instagram_caption: 마지막 줄에 "🔮 내 생년월일로 보는 자세한 운세는 프로필 링크에서
+  확인하세요 (3,000원)"처럼, 인스타그램은 캡션 안 링크가 눌리지 않으니
+  "프로필 링크"를 안내하는 문구를 자연스럽게 넣으세요.
+- threads_text: 마지막 줄에 실제 링크를 그대로 넣으세요: {fortune_url}
+- youtube_description: 마지막 문단에 실제 링크를 그대로 넣으세요: {fortune_url}
+- tiktok_caption: 마지막 줄에 "프로필 링크에서 내 운세 확인" 같은 문구를 넣으세요
+  (틱톡도 캡션 링크가 안 눌리므로 프로필 링크 안내 방식).
+- 가격(3,000원)은 최소 인스타그램·유튜브 설명 중 한 곳에는 자연스럽게 언급하세요.
+- 과장 광고 문구("무조건", "100% 적중")는 쓰지 마세요.
+"""
+
     prompt = f"""
-다음 블로그 글을 바탕으로 한국어 SNS 콘텐츠를 만드세요.
+다음 블로그 글을 바탕으로 한국어 SNS 콘텐츠 패키지를 만드세요.
+
 제목: {article.title}
 핵심 키워드: {article.keyword}
 본문 요약: {plain_text_from_html(article.body_html)[:2500]}
+{cta_instruction}
+작성 규칙:
+1. instagram_caption
+   - 첫 문장은 시선을 끄는 훅
+   - 본문 5~8문장
+   - 마지막에 자연스러운 CTA
+   - 해시태그 5~8개
 
-규칙:
-1. instagram_caption: 첫 문장 훅, 본문 5~8문장, 마지막 CTA, 해시태그 5~8개.
-2. threads_text: 짧고 대화체로 5~9문장. 과장 금지.
-3. shorts_script: 35~50초 분량. 훅, 장면별 대사, 자막, 마무리 CTA 포함.
-4. 사실을 새로 꾸며내지 마세요.
+2. threads_text
+   - 짧고 자연스러운 대화체
+   - 5~9문장
+   - 과장 표현 금지
 
-JSON 하나만 출력하세요.
+3. shorts_script
+   - 35~50초 분량
+   - 첫 2초 훅
+   - 장면별 대사
+   - 화면 자막
+   - 마지막 CTA
+
+4. instatoon
+   - 반드시 정확히 8컷
+   - 각 컷은 반드시 아래 형식으로 작성
+   - 각 컷 사이에는 반드시 [CUT] 구분자를 넣기
+
+[CUT]
+컷 번호: 1
+장면:
+대사:
+자막:
+
+[CUT]
+컷 번호: 2
+장면:
+대사:
+자막:
+
+이 형식을 8컷까지 반복
+
+5. thumbnail_text
+   - 18자 이내
+   - 핵심 키워드를 자연스럽게 포함
+   - 과장하지 않으면서 클릭하고 싶은 문구
+
+6. youtube_title
+   - 60자 이내
+   - 핵심 키워드를 앞쪽에 배치
+   - 과장 표현 금지
+
+7. youtube_description
+   - 3~5문단
+   - 첫 문단에 영상 핵심 요약(검색 노출용)
+   - 마지막에 채널 구독 유도 CTA
+
+8. youtube_tags
+   - 쉼표로 구분한 키워드 10~15개
+
+9. tiktok_caption
+   - 짧고 임팩트 있는 한 줄 훅으로 시작
+   - 2~4문장
+   - 해시태그 4~6개 (틱톡에서 자주 쓰는 형태)
+
+반드시 아래 JSON 형식 하나만 출력하세요.
+
 {{
   "instagram_caption": "...",
   "threads_text": "...",
-  "shorts_script": "..."
+  "shorts_script": "...",
+"instatoon": "[CUT]\n컷 번호: 1\n장면: ...\n대사: ...\n자막: ...\n\n[CUT]\n컷 번호: 2\n장면: ...\n대사: ...\n자막: ...",
+"...",
+  "thumbnail_text": "...",
+  "youtube_title": "...",
+  "youtube_description": "...",
+  "youtube_tags": "...",
+  "tiktok_caption": "..."
 }}
 """
-    response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
+
+    response = openai_client().responses.create(
+        model=OPENAI_MODEL,
+        input=prompt,
+    )
+    log_ai_usage("text")
+
     raw = strip_code_fence(response.output_text)
+
     try:
         return json.loads(raw)
+
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
+
         if not match:
-            raise RuntimeError("SNS 콘텐츠 응답을 JSON으로 읽지 못했습니다.")
+            raise RuntimeError(
+                "SNS 콘텐츠 응답을 JSON으로 읽지 못했습니다."
+            )
+
         return json.loads(match.group(0))
 
+
+
+
+def current_instatoon_text(article):
+    return canonical_instatoon_text(article)
+
+
+def replace_instatoon_text(article, new_instatoon_text):
+    notes = article.notes or ""
+    marker = "🎨 인스타툰 8컷"
+
+    if marker in notes:
+        prefix = notes.split(marker, 1)[0].rstrip()
+    else:
+        prefix = notes.rstrip()
+
+    article.notes = (
+        prefix
+        + "\n\n========================"
+        + "\n🎨 인스타툰 8컷"
+        + "\n========================\n"
+        + (new_instatoon_text or "").strip()
+    )
+
+
+def generate_director_revision(article, tone="공감형", intensity="보통"):
+    instatoon_text = current_instatoon_text(article)
+
+    if not instatoon_text:
+        raise ValueError(
+            "분석할 인스타툰 8컷이 없습니다. 먼저 전체 파이프라인을 실행해 주세요."
+        )
+
+    prompt = f"""
+당신은 한국 인스타툰 전문 연출 감독입니다.
+
+콘텐츠 제목:
+{article.title}
+
+핵심 키워드:
+{article.keyword}
+
+브랜드 스타일:
+{article.brand_style}
+
+독자:
+{article.audience or '일반 독자'}
+
+원본 인스타툰:
+{instatoon_text}
+
+연출 방향:
+- 톤: {tone}
+- 수정 강도: {intensity}
+
+분석 목표:
+1. 첫 컷이 1초 안에 시선을 끄는지 평가
+2. 컷마다 장면과 감정이 실제로 변화하는지 평가
+3. 같은 구도나 비슷한 대사가 반복되는지 확인
+4. 엄마와 딸의 감정선이 자연스럽게 이어지는지 확인
+5. 7~8컷에 반전, 깨달음, 행동 유도 중 하나가 있는지 확인
+6. 이미지 생성에 적합하도록 장면은 구체적으로 작성
+7. 대사와 자막은 짧고 자연스러운 한국어로 작성
+8. 반드시 정확히 8컷 유지
+9. 사실을 새로 꾸며내지 말 것
+10. 제품 광고는 원본에 있는 경우에만 자연스럽게 유지
+
+수정 강도 기준:
+- 약하게: 원본 의미를 유지하고 문장과 구도만 정리
+- 보통: 훅, 감정선, 장면 변화까지 개선
+- 강하게: 핵심 주제만 유지하고 연출을 적극 재구성
+
+반드시 아래 JSON 형식 하나만 출력하세요.
+
+{{
+  "score": 0,
+  "summary": "전체 평가",
+  "strengths": ["장점1", "장점2"],
+  "problems": ["문제1", "문제2"],
+  "directing_notes": [
+    {{
+      "cut_number": 1,
+      "problem": "현재 문제",
+      "direction": "연출 수정 방향",
+      "camera": "추천 구도",
+      "emotion": "핵심 감정"
+    }}
+  ],
+  "revised_instatoon": "[CUT]\\n컷 번호: 1\\n장면: ...\\n대사: ...\\n자막: ...\\n\\n[CUT]\\n컷 번호: 2\\n장면: ...\\n대사: ...\\n자막: ..."
+}}
+"""
+
+    response = openai_client().responses.create(
+        model=OPENAI_MODEL,
+        input=prompt,
+    )
+    log_ai_usage("text")
+
+    raw = strip_code_fence(response.output_text)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.S)
+
+        if not match:
+            raise RuntimeError("연출 감독 응답을 JSON으로 읽지 못했습니다.")
+
+        data = json.loads(match.group(0))
+
+    revised = str(data.get("revised_instatoon", "")).strip()
+    cut_count = len([
+        chunk
+        for chunk in revised.split("[CUT]")
+        if "컷 번호" in chunk
+    ])
+
+    if cut_count != 8:
+        raise RuntimeError(
+            f"AI 수정안이 정확히 8컷이 아닙니다. 현재 {cut_count}컷입니다."
+        )
+
+    return data
+
+
+
+def production_queue_snapshot(article):
+    images = load_json_map(article.instatoon_images)
+    captioned = load_json_map(article.instatoon_captioned_images)
+    audio = load_json_map(article.instatoon_audio)
+
+    return {
+        "images": sum(1 for i in range(1, 9) if images.get(str(i))),
+        "captioned": sum(1 for i in range(1, 9) if captioned.get(str(i))),
+        "audio": sum(1 for i in range(1, 9) if audio.get(str(i))),
+        "reels": bool(article.reels_path),
+        "reels_voice": bool(article.reels_voice_path),
+        "reels_final": bool(article.reels_final_path),
+        "zip": bool(article.export_package_path),
+        "bgm": bool(article.reels_bgm_path),
+    }
+
+
+def save_queue_state(article, step, status, message=""):
+    state = load_json_map(article.production_queue_state)
+    state.update({
+        "step": step,
+        "status": status,
+        "message": message,
+        "updated_at": datetime.utcnow().isoformat(),
+        "snapshot": production_queue_snapshot(article),
+    })
+    article.production_queue_state = json.dumps(
+        state,
+        ensure_ascii=False,
+    )
+
+
+def clear_instatoon_generated_assets(article):
+    filenames = []
+
+    for json_value in [
+        article.instatoon_images,
+        article.instatoon_captioned_images,
+    ]:
+        mapping = load_json_map(json_value)
+        filenames.extend(mapping.values())
+
+    audio_map = load_json_map(article.instatoon_audio)
+
+    for entries in audio_map.values():
+        for entry in entries or []:
+            if isinstance(entry, dict) and entry.get("filename"):
+                filenames.append(entry["filename"])
+
+    filenames.extend([
+        article.reels_path,
+        article.reels_voice_path,
+        article.reels_final_path,
+        article.export_package_path,
+    ])
+
+    for filename in filenames:
+        delete_media_if_exists(filename)
+
+    article.instatoon_images = "{}"
+    article.instatoon_captioned_images = "{}"
+    article.instatoon_audio = "{}"
+    article.instatoon_audio_settings = "{}"
+    article.reels_path = None
+    article.reels_settings = "{}"
+    article.reels_voice_path = None
+    article.reels_voice_settings = "{}"
+    article.reels_final_path = None
+    article.reels_final_settings = "{}"
+    article.export_package_path = None
+    article.export_package_settings = "{}"
 
 
 def generate_content_ideas(topic, count=12):
@@ -515,6 +2889,7 @@ JSON 배열 하나만 출력하세요.
 ]
 """
     response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
+    log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
     try:
         data = json.loads(raw)
@@ -553,46 +2928,345 @@ BASE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ page_title or 'MI Creator OS' }}</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700;900&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#202124;--muted:#6b7280;--line:#e5e7eb;--brand:#6d5dfc;--soft:#f6f5ff;--ok:#0f9d58;--bad:#d93025;--warn:#b26a00}
-*{box-sizing:border-box}body{margin:0;background:#f7f8fc;color:var(--ink);font-family:Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
-.wrap{max-width:1040px;margin:34px auto;padding:0 18px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
-h1{margin:0 0 7px;font-size:30px}h2{margin:0 0 18px;font-size:22px}h3{margin:18px 0 8px}.lead,.small{color:var(--muted)}.small{font-size:14px}
-label{font-weight:700;display:block;margin:14px 0 7px}input,textarea,select{width:100%;border:1px solid #ccd0d5;border-radius:10px;padding:12px;font:inherit;background:#fff}textarea{min-height:150px;resize:vertical}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:10px;padding:12px 17px;background:var(--brand);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn.gray{background:#edf0f4;color:#202124}.btn.green{background:var(--ok)}.btn.red{background:var(--bad)}.btn.orange{background:var(--warn)}
-.flash{padding:13px 16px;border-radius:10px;background:#fff4d6;border:1px solid #f4cc63;margin-bottom:15px}.status{display:inline-block;padding:5px 9px;border-radius:99px;background:#edf7f0;color:var(--ok);font-size:13px;font-weight:700}.status.draft{background:#fff4d6;color:var(--warn)}.status.off{background:#f1f3f4;color:#5f6368}.status.scheduled{background:#eef2ff;color:#4f46e5}
-table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-.preview{border:1px solid var(--line);border-radius:12px;padding:20px;line-height:1.75}.thumb-wrap{position:relative;border-radius:15px;overflow:hidden;background:#ddd}.thumb{width:100%;display:block}.thumb-badge{position:absolute;left:5%;bottom:8%;max-width:88%;background:rgba(20,20,20,.78);color:#fff;padding:13px 18px;border-radius:10px;font-weight:800;font-size:clamp(18px,3vw,34px)}
-.stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}.stat{background:var(--soft);border:1px solid #e8e5ff;border-radius:14px;padding:16px}.stat strong{display:block;font-size:28px;margin-bottom:4px}.copy-box{position:relative}.copy-btn{margin-top:7px;background:#edf0f4;color:#202124}.calendar-item{padding:14px 0;border-bottom:1px solid var(--line)}
-.progress{height:12px;background:#ececf5;border-radius:999px;overflow:hidden}
+:root{
+  --ink:#221f2b;
+  --muted:#7a7488;
+  --line:#e8e3ee;
+  --brand:#4b3f72;
+  --brand-dark:#352c54;
+  --brand-soft:#f4f1fb;
+  --gold:#b8925a;
+  --gold-soft:#faf3e6;
+  --paper:#faf8f4;
+  --ok:#127a53;
+  --bad:#c23b3b;
+  --warn:#a86a1f;
+  --shadow:0 12px 32px rgba(43,32,74,.08);
+  --shadow-lift:0 18px 44px rgba(43,32,74,.14);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+  letter-spacing:-0.01em;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1040px;margin:34px auto;padding:0 18px}
+.card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:26px;
+  margin-bottom:18px;
+  box-shadow:var(--shadow);
+}
+h1{
+  margin:0 0 10px;
+  font-family:'Noto Serif KR',serif;
+  font-size:32px;
+  font-weight:800;
+  letter-spacing:-0.01em;
+  color:var(--brand-dark);
+  line-height:1.3;
+}
+h1::before{
+  content:"";
+  display:block;
+  width:40px;
+  height:4px;
+  background:var(--gold);
+  border-radius:3px;
+  margin-bottom:14px;
+}
+h2{margin:0 0 18px;font-size:21px;font-weight:800;letter-spacing:-0.01em}
+h3{margin:18px 0 8px;font-weight:700}
+.lead,.small{color:var(--muted)}.small{font-size:14px}
+label{font-weight:700;display:block;margin:14px 0 7px;color:#3a3450}
+input,textarea,select{
+  width:100%;
+  border:1.5px solid #e2dced;
+  border-radius:12px;
+  padding:12px 13px;
+  font:inherit;
+  background:#fff;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+input:focus,textarea:focus,select:focus{
+  outline:none;
+  border-color:var(--brand);
+  box-shadow:0 0 0 3px var(--brand-soft);
+}
+textarea{min-height:150px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.btn{
+  border:0;
+  border-radius:11px;
+  padding:12px 18px;
+  background:var(--brand-dark);
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-block;
+  box-shadow:0 4px 14px rgba(75,63,114,.28);
+  transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.btn.gray{background:#f1eef8;color:#3a3450;box-shadow:none}
+.btn.gray:hover{background:#e7e1f5}
+.btn.green{background:var(--ok);box-shadow:0 4px 14px rgba(18,122,83,.24)}
+.btn.red{background:var(--bad);box-shadow:0 4px 14px rgba(194,59,59,.24)}
+.btn.orange{background:var(--warn);box-shadow:0 4px 14px rgba(168,106,31,.24)}
+.flash{padding:13px 16px;border-radius:12px;background:var(--gold-soft);border:1px solid #ecd9b6;margin-bottom:15px;color:#6b4e1e}
+.status{display:inline-block;padding:5px 10px;border-radius:99px;background:#e7f5ee;color:var(--ok);font-size:13px;font-weight:700}
+.status.draft{background:var(--gold-soft);color:var(--warn)}
+.status.off{background:#f1eff5;color:#6b6478}
+.status.scheduled{background:var(--brand-soft);color:var(--brand)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.preview{border:1px solid var(--line);border-radius:14px;padding:20px;line-height:1.75}
+.article-preview-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:14px;
+}
+
+.article-live-preview{
+  min-height:300px;
+  padding:28px;
+  background:#fff;
+  line-height:1.85;
+}
+
+.article-live-preview h1{
+  font-family:'Noto Serif KR',serif;
+  font-size:30px;
+  line-height:1.35;
+  margin:0 0 22px;
+  color:var(--brand-dark);
+}
+
+.article-live-preview h2{
+  font-size:24px;
+  line-height:1.4;
+  margin:30px 0 14px;
+}
+
+.article-live-preview h3{
+  font-size:20px;
+  margin:24px 0 10px;
+}
+
+.article-live-preview p{
+  margin:0 0 16px;
+}
+
+.article-live-preview li{
+  margin-bottom:10px;
+}
+
+.html-editor-details{
+  margin-top:18px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  background:var(--paper);
+}
+
+.html-editor-details summary{
+  cursor:pointer;
+  padding:16px 18px;
+  font-weight:800;
+  background:var(--brand-soft);
+  color:var(--brand-dark);
+  user-select:none;
+}
+
+.html-editor-details[open] summary{
+  border-bottom:1px solid var(--line);
+}
+
+.html-editor-inner{
+  padding:18px;
+  background:#fff;
+}
+
+@media(max-width:700px){
+  .article-preview-header{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .article-live-preview{
+    padding:20px;
+  }
+}
+.thumb-wrap{position:relative;border-radius:16px;overflow:hidden;background:#ddd}.thumb{width:100%;display:block}.thumb-badge{position:absolute;left:5%;bottom:8%;max-width:88%;background:rgba(31,25,46,.82);color:#fff;padding:13px 18px;border-radius:11px;font-weight:800;font-size:clamp(18px,3vw,34px)}
+.stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.stat{background:var(--brand-soft);border:1px solid #e6defa;border-radius:16px;padding:16px}
+.stat strong{display:block;font-size:28px;margin-bottom:4px;color:var(--brand-dark);font-weight:800}
+.copy-box{position:relative}.copy-btn{margin-top:7px;background:#f1eef8;color:#3a3450}.calendar-item{padding:14px 0;border-bottom:1px solid var(--line)}
+.progress{height:11px;background:#efeaf9;border-radius:999px;overflow:hidden}
 .progress>span{display:block;height:100%;background:var(--brand);border-radius:999px}
 .pipeline-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
-.pipeline-step{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
-.idea-card{border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
-.checklist{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.check-item{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft)}.money-box{border:1px solid #f0d9a7;background:#fffaf0;border-radius:14px;padding:18px}.notice{font-size:13px;color:var(--muted);background:#f7f8fc;border-radius:9px;padding:10px}.toggle{display:flex;align-items:center;gap:9px;margin-top:14px}.toggle input{width:auto}.score{font-size:46px;font-weight:900}.check{padding:10px 0;border-bottom:1px solid var(--line)}.pass{color:var(--ok);font-weight:800}.fail{color:var(--bad);font-weight:800}.tags{display:flex;gap:7px;flex-wrap:wrap}.tag{background:var(--soft);color:#5046b8;padding:7px 10px;border-radius:99px}
-@media(max-width:700px){.grid,.stat-grid,.pipeline-grid,.checklist{grid-template-columns:1fr}.wrap{margin-top:18px}.card{padding:18px}table thead{display:none}table tr,table td{display:block}table tr{padding:12px 0;border-bottom:1px solid var(--line)}table td{border:0;padding:4px 0}}
+.pipeline-step{border:1px solid var(--line);border-radius:13px;padding:12px;background:#fff}
+.idea-card{border:1px solid var(--line);border-radius:15px;padding:16px;margin:12px 0}
+.instatoon-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  margin-top:18px;
+}
 
-.nav-shell{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:1px solid #e5e7eb}
-.nav-inner{max-width:1180px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px}
-.nav-brand{font-weight:900;text-decoration:none;color:#111827;margin-right:auto;font-size:18px}
-.nav-home{background:#eef2ff;color:#4338ca!important;padding:9px 13px;border-radius:11px;text-decoration:none;font-weight:800}
+.instatoon-card{
+  position:relative;
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:18px;
+  background:#ffffff;
+  box-shadow:var(--shadow);
+}
+
+.instatoon-card h3{
+  margin:10px 0 12px;
+  font-size:18px;
+}
+
+.instatoon-card-content{
+  white-space:pre-wrap;
+  line-height:1.8;
+  min-height:180px;
+  color:#4a4458;
+}
+
+.instatoon-number{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:48px;
+  height:32px;
+  padding:0 12px;
+  border-radius:999px;
+  background:var(--brand-soft);
+  color:var(--brand-dark);
+  font-size:13px;
+  font-weight:900;
+}
+
+@media(max-width:700px){
+  .instatoon-grid{
+    grid-template-columns:1fr;
+  }
+}
+.checklist{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.check-item{border:1px solid var(--line);border-radius:13px;padding:12px;background:var(--brand-soft)}
+.money-box{border:1px solid #ecd9b6;background:var(--gold-soft);border-radius:16px;padding:18px}
+.notice{font-size:13px;color:var(--muted);background:var(--paper);border-radius:10px;padding:10px}
+.toggle{display:flex;align-items:center;gap:9px;margin-top:14px}.toggle input{width:auto}
+.score{font-size:46px;font-weight:900;color:var(--brand-dark)}
+.check{padding:10px 0;border-bottom:1px solid var(--line)}
+.pass{color:var(--ok);font-weight:800}.fail{color:var(--bad);font-weight:800}
+.tags{display:flex;gap:7px;flex-wrap:wrap}
+.tag{background:var(--brand-soft);color:var(--brand-dark);padding:7px 11px;border-radius:99px;font-weight:600}
+@media(max-width:900px){
+  .stat-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+@media(max-width:700px){
+  .grid,.stat-grid,.pipeline-grid,.checklist,.instatoon-grid,.cut-menu-grid{
+    grid-template-columns:1fr!important;
+  }
+  .wrap{margin-top:18px}
+  .card{padding:18px}
+  table thead{display:none}
+  table tr,table td{display:block}
+  table tr{padding:12px 0;border-bottom:1px solid var(--line)}
+  table td{border:0;padding:4px 0}
+}
+@media(max-width:480px){
+  [class*="grid" i]{
+    grid-template-columns:1fr!important;
+  }
+  html,body{overflow-x:hidden}
+  img{max-width:100%;height:auto}
+  .wrap{padding:0 12px}
+  h1{font-size:24px}
+  h2{font-size:19px}
+}
+
+.nav-shell{position:sticky;top:0;z-index:50;background:rgba(250,248,244,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-inner{max-width:1180px;margin:0 auto;padding:12px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.nav-brand{font-family:'Noto Serif KR',serif;font-weight:700;text-decoration:none;color:var(--brand-dark);margin-right:auto;font-size:19px;letter-spacing:-0.01em}
+.nav-home{background:var(--brand-soft);color:var(--brand-dark)!important;padding:9px 14px;border-radius:11px;text-decoration:none;font-weight:700}
 .all-menu{position:relative}
-.all-menu summary{list-style:none;cursor:pointer;padding:9px 13px;border-radius:11px;background:#4f46e5;color:#fff;font-weight:800;user-select:none}
+.all-menu summary{list-style:none;cursor:pointer;padding:9px 14px;border-radius:11px;background:var(--brand-dark);color:#fff;font-weight:700;user-select:none;box-shadow:0 4px 14px rgba(75,63,114,.28)}
 .all-menu summary::-webkit-details-marker{display:none}
-.all-menu[open] summary{background:#3730a3}
-.all-menu-panel{position:absolute;top:47px;right:0;width:min(430px,calc(100vw - 28px));max-height:calc(100vh - 80px);overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:15px;box-shadow:0 20px 50px rgba(15,23,42,.18)}
+.all-menu[open] summary{filter:brightness(.94)}
+.all-menu-panel{position:absolute;top:47px;right:0;width:min(430px,calc(100vw - 28px));max-height:calc(100vh - 80px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:20px;padding:15px;box-shadow:var(--shadow-lift)}
 .menu-section{padding:5px 0 12px}
-.menu-section+.menu-section{border-top:1px solid #eef0f3;padding-top:14px}
-.menu-title{font-size:13px;font-weight:900;color:#6366f1;margin:0 0 7px;padding:0 5px}
+.menu-section+.menu-section{border-top:1px solid var(--line);padding-top:14px}
+.menu-title{font-size:12px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px;padding:0 5px}
 .menu-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-.menu-links a{display:block;padding:11px 10px;border-radius:11px;text-decoration:none;color:#111827;background:#f6f7f9;font-weight:700;font-size:14px}
-.menu-links a:hover{background:#eef2ff;color:#4338ca}
+.menu-links a{display:block;padding:11px 10px;border-radius:12px;text-decoration:none;color:var(--ink);background:var(--paper);font-weight:600;font-size:14px;transition:background .12s ease}
+.menu-links a:hover{background:var(--brand-soft);color:var(--brand-dark)}
 @media(max-width:600px){
   .nav-brand{font-size:16px}
   .nav-home{display:none}
   .all-menu-panel{position:fixed;top:61px;left:14px;right:14px;width:auto}
   .menu-links{grid-template-columns:1fr}
+}
+
+.content-tabs{
+  position:sticky;
+  top:62px;
+  z-index:40;
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:12px;
+  margin-bottom:18px;
+  background:rgba(250,248,244,.96);
+  backdrop-filter:blur(10px);
+  border:1px solid var(--line);
+  border-radius:18px;
+}
+
+.content-tab{
+  flex:0 0 auto;
+  border:0;
+  border-radius:999px;
+  padding:10px 16px;
+  background:#f1eef8;
+  color:#4a4458;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.content-tab.active{
+  background:var(--brand-dark);
+  color:#fff;
+}
+
+.tab-panel{
+  display:none;
+}
+
+.tab-panel.active{
+  display:block;
 }
 
 </style>
@@ -648,6 +3322,13 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1
         </div>
 
         <div class="menu-section">
+          <div class="menu-title">고객용 서비스</div>
+          <div class="menu-links">
+            <a href="/fortune/" target="_blank">🔮 오늘의 운세 (손님용 결제 페이지)</a>
+          </div>
+        </div>
+
+        <div class="menu-section">
           <div class="menu-title">기존 도구</div>
           <div class="menu-links">
             <a href="{{url_for('content_calendar')}}">기존 콘텐츠 캘린더</a>
@@ -686,100 +3367,18 @@ def page(body_template, **context):
     body = render_template_string(body_template, **context)
     return render_template_string(BASE_HTML, body=Markup(body), **context)
 
+def page_file(template_name, **context):
+    body = render_template(template_name, **context)
+
+    return render_template_string(
+        BASE_HTML,
+        body=Markup(body),
+        **context,
+    )
 
 @app.get("/")
 def home():
     return redirect(url_for("home_v16.dashboard"))
-
-    articles = Article.query.order_by(Article.created_at.desc()).all()
-    google_connected = bool(get_setting("google_credentials"))
-    total_count = Article.query.count()
-    public_count = Article.query.filter_by(blogger_status="Blogger 공개").count()
-    draft_count = Article.query.filter_by(blogger_status="Blogger 초안").count()
-    scheduled_count = Article.query.filter(Article.scheduled_at.isnot(None)).count()
-    upcoming = Article.query.filter(
-        Article.scheduled_at.isnot(None)
-    ).order_by(Article.scheduled_at.asc()).limit(5).all()
-    progress_map = {a.id: pipeline_progress(a) for a in articles}
-    return page("""
-<div class="card">
-<h1>MI Creator Hub <span class="status">V17.1</span></h1>
-<p class="lead">키워드 하나로 글, SEO, 썸네일, Blogger 발행과 수익화 링크까지 한 흐름으로 만들어요.</p>
-<div class="actions"><a class="btn" href="{{url_for('home_v16.dashboard')}}">쉬운 홈으로 가기</a><a class="btn gray" href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a><a class="btn gray" href="{{url_for('marketing_v14.dashboard')}}">AI 마케팅 센터</a><a class="btn gray" href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a><a class="btn gray" href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a><a class="btn gray" href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a><a class="btn gray" href="{{url_for('manager_v10.dashboard')}}">AI 콘텐츠 매니저</a><a class="btn gray" href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a><a class="btn gray" href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a><a class="btn gray" href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a><a class="btn gray" href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a><a class="btn gray" href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a><a class="btn gray" href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a><a class="btn gray" href="{{url_for('content_calendar')}}">콘텐츠 캘린더</a><a class="btn gray" href="{{url_for('idea_lab')}}">AI 아이디어 연구소</a></div>
-<div class="stat-grid">
-<div class="stat"><strong>{{total_count}}</strong><span class="small">전체 글</span></div>
-<div class="stat"><strong>{{public_count}}</strong><span class="small">공개 발행</span></div>
-<div class="stat"><strong>{{draft_count}}</strong><span class="small">Blogger 초안</span></div>
-<div class="stat"><strong>{{scheduled_count}}</strong><span class="small">예약 글</span></div>
-</div>
-</div>
-
-{% if upcoming %}
-<section class="card">
-<h2>다가오는 예약</h2>
-{% for item in upcoming %}
-<div class="calendar-item"><strong>{{item.scheduled_at.strftime('%Y-%m-%d %H:%M')}}</strong> · {{item.title}}
-<a class="btn gray" style="float:right;padding:7px 10px" href="{{url_for('edit_article',article_id=item.id)}}">열기</a></div>
-{% endfor %}
-</section>
-{% endif %}
-
-<div class="grid">
-<section class="card">
-<h2>1. 새 글 만들기</h2>
-<form method="post" action="{{url_for('create_article')}}">
-<label>키워드</label><input name="keyword" required placeholder="예: 초등학생 여름방학 간식">
-<div class="grid">
-<div><label>브랜드 스타일</label><select name="brand_style"><option>육아·생활</option><option>보험·재무</option><option>애터미·생활용품</option><option>쿠팡·쇼핑</option><option>일반 정보</option></select></div>
-<div><label>글 유형</label><select name="article_type"><option>정보형</option><option>후기형</option><option>비교형</option><option>문제 해결형</option></select></div>
-<div><label>분량</label><select name="length"><option>약 1,500자</option><option selected>약 2,500자</option><option>약 3,500자</option></select></div>
-<div><label>독자</label><input name="audience" placeholder="예: 초등학생 자녀를 둔 부모"></div>
-</div>
-<label>내 경험·꼭 넣을 내용</label><textarea name="notes" placeholder="직접 사용한 느낌, 주의점, 가격 등. 모르는 사실은 비워두세요."></textarea>
-<div class="actions"><button class="btn" type="submit">AI 글 생성</button></div>
-</form>
-</section>
-
-<section class="card">
-<h2>2. 연결 상태</h2>
-<h3>OpenAI</h3><p class="small">글과 썸네일 생성용</p>
-<p><span class="status">{{'연결됨' if openai_ok else '환경변수 필요'}}</span></p>
-<h3>Google Blogger</h3><p class="small">내 블로그 목록 불러오기와 발행</p>
-{% if google_connected %}
-<p><span class="status">연결됨</span></p>
-<div class="actions">
-<a class="btn" href="{{url_for('google_change_account')}}">Google 계정 변경</a>
-<a class="btn gray" href="{{url_for('google_disconnect')}}">연결 해제</a>
-</div>
-{% else %}
-<div class="actions"><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a></div>
-{% endif %}
-</section>
-</div>
-
-<section class="card">
-<h2>저장된 글</h2>
-{% if articles %}
-<table><thead><tr><th>제목</th><th>SEO</th><th>상태</th><th></th></tr></thead><tbody>
-{% for a in articles %}<tr>
-<td><strong>{{a.title}}</strong><div class="small">{{a.keyword}} · {{a.created_at.strftime('%Y-%m-%d %H:%M')}}</div>
-<div class="progress" style="margin-top:8px"><span style="width:{{progress_map.get(a.id,0)}}%"></span></div>
-<div class="small">콘텐츠 파이프라인 {{progress_map.get(a.id,0)}}%</div></td>
-<td>{{a.seo_score}}점</td><td>
-{% if a.scheduled_at %}<span class="status scheduled">예약됨</span>
-{% elif a.blogger_status == 'Blogger 공개' %}<span class="status">공개됨</span>
-{% elif a.blogger_status == 'Blogger 초안' %}<span class="status draft">초안</span>
-{% else %}<span class="status off">미발행</span>{% endif %}
-</td>
-<td><a class="btn gray" href="{{url_for('edit_article',article_id=a.id)}}">열기·수정</a></td>
-</tr>{% endfor %}
-</tbody></table>
-{% else %}<p class="small">아직 글이 없습니다. 위에서 첫 글을 만들어보세요.</p>{% endif %}
-</section>
-""", articles=articles, google_connected=google_connected,
-       total_count=total_count, public_count=public_count, draft_count=draft_count,
-       scheduled_count=scheduled_count, upcoming=upcoming, progress_map=progress_map,
-       openai_ok=bool(os.getenv("OPENAI_API_KEY")), page_title="MI Creator Hub")
 
 
 @app.post("/articles")
@@ -846,162 +3445,1169 @@ def edit_article(article_id):
             flash(f"Blogger 목록을 불러오지 못했습니다: {e}")
     tags = [x.strip() for x in (article.tags or "").split(",") if x.strip()]
     publish_logs = PublishLog.query.filter_by(article_id=article.id).order_by(PublishLog.created_at.desc()).limit(20).all()
+
     progress = pipeline_progress(article)
-    return page("""
-<div class="card">
-<a href="{{url_for('home')}}">← 홈으로</a>
-<h1 style="margin-top:14px">글 확인 및 수정</h1>
-<form method="post">
-<label>제목</label><input name="title" value="{{a.title}}" required>
-<label>메타 설명</label><textarea name="meta_description" style="min-height:90px">{{a.meta_description}}</textarea>
-<label>태그 <span class="small">쉼표로 구분</span></label><input name="tags" value="{{a.tags}}">
-<label>본문 HTML</label><textarea name="body_html" style="min-height:430px">{{a.body_html}}</textarea>
-<div class="actions"><button class="btn" type="submit">수정 내용 저장·SEO 재분석</button></div>
-</form>
-</div>
 
-<section class="card">
-<h2>AI 콘텐츠 파이프라인</h2>
-<p class="small">한 번의 실행으로 SEO 재분석, 썸네일, 인스타, Threads, 쇼츠 대본까지 준비합니다.</p>
-<div class="progress"><span style="width:{{progress}}%"></span></div>
-<p><strong>{{progress}}%</strong> 준비 완료</p>
-<div class="pipeline-grid">
-<div class="pipeline-step"><strong>블로그 본문</strong><div class="small">{{'완료' if a.body_html else '대기'}}</div></div>
-<div class="pipeline-step"><strong>SEO 분석</strong><div class="small">{{'완료' if a.seo_score else '대기'}}</div></div>
-<div class="pipeline-step"><strong>썸네일</strong><div class="small">{{'완료' if a.thumbnail_path else '대기'}}</div></div>
-<div class="pipeline-step"><strong>인스타</strong><div class="small">{{'완료' if a.instagram_caption else '대기'}}</div></div>
-<div class="pipeline-step"><strong>Threads</strong><div class="small">{{'완료' if a.threads_text else '대기'}}</div></div>
-<div class="pipeline-step"><strong>쇼츠 대본</strong><div class="small">{{'완료' if a.shorts_script else '대기'}}</div></div>
-</div>
-<form method="post" action="{{url_for('run_pipeline',article_id=a.id)}}">
-<label>썸네일 분위기</label>
-<select name="thumbnail_style"><option>따뜻한 생활 사진</option><option>깔끔한 매거진</option><option>밝은 일러스트</option><option>전문적인 인포그래픽</option></select>
-<div class="actions"><button class="btn" type="submit">전체 파이프라인 실행</button></div>
-</form>
-<p class="notice">이미 만들어진 결과도 새 내용으로 다시 생성됩니다. AI 이미지 생성 비용이 발생할 수 있습니다.</p>
-</section>
+    instatoon_images = load_json_map(article.instatoon_images)
+    instatoon_captioned_images = load_json_map(
+        article.instatoon_captioned_images
+    )
 
-<section class="card">
-<h2>업로드 체크리스트</h2>
-<form method="post" action="{{url_for('save_checklist',article_id=a.id)}}">
-<div class="checklist">
-<label class="check-item"><input type="checkbox" name="blog_done" value="1" {{'checked' if a.blog_done else ''}}> 블로그 작성·확인</label>
-<label class="check-item"><input type="checkbox" name="instagram_done" value="1" {{'checked' if a.instagram_done else ''}}> 인스타 업로드</label>
-<label class="check-item"><input type="checkbox" name="threads_done" value="1" {{'checked' if a.threads_done else ''}}> Threads 업로드</label>
-<label class="check-item"><input type="checkbox" name="shorts_done" value="1" {{'checked' if a.shorts_done else ''}}> 릴스·쇼츠 촬영</label>
-</div>
-<div class="actions"><button class="btn gray" type="submit">체크리스트 저장</button></div>
-</form>
-</section>
+    instatoon_character_profile = get_instatoon_character_profile(article)
+    instatoon_audio = load_json_map(article.instatoon_audio)
+    instatoon_audio_settings = load_json_map(
+        article.instatoon_audio_settings
+    )
+    instatoon_presets = InstatoonPreset.query.order_by(
+        InstatoonPreset.updated_at.desc()
+    ).all()
+    director_report = load_json_map(article.director_report)
+    production_queue_state = load_json_map(
+        article.production_queue_state
+    )
+    production_queue_snapshot_data = production_queue_snapshot(article)
+    instatoon_cuts = get_instatoon_cuts(article)
+    instatoon_text = canonical_instatoon_text(article)
 
-<div class="grid">
-<section class="card">
-<h2>SEO 분석</h2><div class="score">{{a.seo_score}}<span class="small"> / 100</span></div>
-{% for c in seo_report.get('checks',[]) %}
-<div class="check"><span class="{{'pass' if c.passed else 'fail'}}">{{'통과' if c.passed else '보완'}}</span> · <strong>{{c.name}}</strong>
-{% if not c.passed %}<div class="small">{{c.advice}}</div>{% endif %}</div>
-{% endfor %}
-<h3>추천 태그</h3><div class="tags">{% for t in tags %}<span class="tag">#{{t}}</span>{% endfor %}</div>
-</section>
-
-<section class="card">
-<h2>AI 썸네일</h2>
-{% if a.thumbnail_path %}<div class="thumb-wrap"><img class="thumb" src="{{url_for('media',filename=a.thumbnail_path)}}" alt="{{a.title}}"><div class="thumb-badge">{{a.thumbnail_text or a.title}}</div></div>
-{% else %}<p class="small">아직 썸네일이 없습니다. 글 내용에 맞는 가로형 대표 이미지를 만들어요.</p>{% endif %}
-<form method="post" action="{{url_for('generate_thumbnail_route',article_id=a.id)}}">
-<label>썸네일 문구</label><input name="thumbnail_text" value="{{a.thumbnail_text or a.title}}" maxlength="45">
-<label>이미지 분위기</label><select name="thumbnail_style"><option>따뜻한 생활 사진</option><option>깔끔한 매거진</option><option>밝은 일러스트</option><option>전문적인 인포그래픽</option></select>
-<div class="actions"><button class="btn" type="submit">{{'썸네일 다시 만들기' if a.thumbnail_path else 'AI 썸네일 만들기'}}</button></div>
-</form>
-</section>
-</div>
-
-<section class="card">
-<h2>수익화 링크</h2>
-<p class="small">상품명과 본인의 제휴 링크를 넣으면 Blogger 글 아래에 추천 영역과 제휴 고지가 자동으로 붙습니다.</p>
-<form method="post" action="{{url_for('save_monetization',article_id=a.id)}}">
-<div class="grid">
-<div><label>쿠팡 상품명</label><input name="coupang_product_name" value="{{a.coupang_product_name or ''}}" placeholder="예: 어린이 간식 보관용기"></div>
-<div><label>쿠팡파트너스 링크</label><input name="coupang_link" value="{{a.coupang_link or ''}}" placeholder="https://..."></div>
-<div><label>애터미 상품명</label><input name="atomy_product_name" value="{{a.atomy_product_name or ''}}" placeholder="예: 애터미 주방세제"></div>
-<div><label>애터미 공유 링크</label><input name="atomy_link" value="{{a.atomy_link or ''}}" placeholder="https://..."></div>
-</div>
-<label class="toggle"><input type="checkbox" name="affiliate_enabled" value="1" {{'checked' if a.affiliate_enabled else ''}}> Blogger 발행 글에 추천 영역 포함</label>
-<div class="actions"><button class="btn" type="submit">수익화 설정 저장</button></div>
-</form>
-{% if a.affiliate_html %}<div class="money-box" style="margin-top:18px"><h3>발행될 추천 영역 미리보기</h3>{{a.affiliate_html|safe}}</div>{% endif %}
-<p class="notice">실제 상품 정보와 링크는 직접 확인해서 입력해 주세요. 이 기능은 상품을 자동 검색하거나 가격·효능을 확인하지 않습니다.</p>
-</section>
-
-<section class="card"><h2>미리보기</h2><div class="preview"><h1>{{a.title}}</h1>{{a.body_html|safe}}{% if a.affiliate_enabled %}{{a.affiliate_html|safe}}{% endif %}</div></section>
-
-<section class="card">
-<h2>SNS 변환</h2>
-<p class="small">블로그 글을 인스타그램, Threads, 쇼츠용으로 한 번에 바꿉니다.</p>
-<form method="post" action="{{url_for('generate_social_route',article_id=a.id)}}">
-<div class="actions"><button class="btn" type="submit">SNS 콘텐츠 자동 생성</button></div>
-</form>
-{% if a.instagram_caption %}<label>인스타그램 캡션</label><div class="copy-box"><textarea id="instagram_text" readonly>{{a.instagram_caption}}</textarea><button class="btn copy-btn" type="button" onclick="copyText('instagram_text',this)">인스타 캡션 복사</button></div>{% endif %}
-{% if a.threads_text %}<label>Threads 글</label><div class="copy-box"><textarea id="threads_text" readonly>{{a.threads_text}}</textarea><button class="btn copy-btn" type="button" onclick="copyText('threads_text',this)">Threads 글 복사</button></div>{% endif %}
-{% if a.shorts_script %}<label>쇼츠 대본</label><div class="copy-box"><textarea id="shorts_text" readonly style="min-height:240px">{{a.shorts_script}}</textarea><button class="btn copy-btn" type="button" onclick="copyText('shorts_text',this)">쇼츠 대본 복사</button></div>{% endif %}
-</section>
-
-<section class="card">
-<h2>Blogger 발행</h2>
-{% if a.blogger_url %}<p><a class="btn gray" href="{{a.blogger_url}}" target="_blank" rel="noopener">발행된 글 바로가기</a></p>{% endif %}
-<p class="small">처음에는 초안으로 확인하고, 이후 같은 블로그에 다시 보내면 기존 글이 업데이트됩니다.</p>
-{% if blogs %}
-<form method="post" action="{{url_for('publish_blogger',article_id=a.id)}}">
-<label>블로그 선택</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}" {{'selected' if a.blogger_blog_id == b.id else ''}}>{{b.name}}</option>{% endfor %}</select>
-<label>발행 방식</label><select name="mode"><option value="draft">초안으로 저장</option><option value="publish">바로 공개 발행</option></select>
-<div class="actions"><button class="btn green" type="submit">{{'Blogger 글 업데이트' if a.blogger_post_id else 'Blogger로 보내기'}}</button></div>
-</form>
-
-<form method="post" action="{{url_for('schedule_blogger',article_id=a.id)}}">
-<label>예약 발행 시간</label><input type="datetime-local" name="scheduled_at" required>
-<label>예약할 블로그</label><select name="blog_id">{% for b in blogs %}<option value="{{b.id}}">{{b.name}}</option>{% endfor %}</select>
-<div class="actions"><button class="btn orange" type="submit">공개 발행 예약</button>
-{% if a.scheduled_at %}<button class="btn gray" type="submit" formaction="{{url_for('cancel_schedule',article_id=a.id)}}" formnovalidate>예약 취소</button>{% endif %}</div>
-</form>
-{% if a.scheduled_at %}<p class="small">현재 예약: {{a.scheduled_at.strftime('%Y-%m-%d %H:%M')}}</p>{% endif %}
-{% else %}<p>홈 화면에서 Google Blogger를 먼저 연결해 주세요.</p><a class="btn" href="{{url_for('google_connect')}}">Google 연결</a>{% endif %}
-</section>
-
-<section class="card">
-<h2>발행 이력</h2>
-{% if publish_logs %}
-<table><thead><tr><th>시간</th><th>작업</th><th>결과</th><th>링크</th></tr></thead><tbody>
-{% for log in publish_logs %}<tr>
-<td>{{log.created_at.strftime('%Y-%m-%d %H:%M')}}</td>
-<td>{{log.action}}</td>
-<td>{{log.status}}{% if log.message %}<div class="small">{{log.message}}</div>{% endif %}</td>
-<td>{% if log.blogger_url %}<a href="{{log.blogger_url}}" target="_blank" rel="noopener">열기</a>{% else %}-{% endif %}</td>
-</tr>{% endfor %}
-</tbody></table>
-{% else %}<p class="small">아직 발행 이력이 없습니다.</p>{% endif %}
-</section>
-""", a=article, seo_report=seo_report, tags=tags, blogs=blogs, publish_logs=publish_logs,
-       progress=progress, page_title=f"{article.title} | MI Creator Hub")
+    return page_file(
+        "edit_article.html",
+        a=article,
+        seo_report=seo_report,
+        tags=tags,
+        blogs=blogs,
+        publish_logs=publish_logs,
+        progress=progress,
+        instatoon_images=instatoon_images,
+        instatoon_captioned_images=instatoon_captioned_images,
+        instatoon_character_profile=instatoon_character_profile,
+        instatoon_audio=instatoon_audio,
+        instatoon_audio_settings=instatoon_audio_settings,
+        instatoon_presets=instatoon_presets,
+        director_report=director_report,
+        production_queue_state=production_queue_state,
+        production_queue_snapshot=production_queue_snapshot_data,
+        instatoon_cuts=instatoon_cuts,
+        instatoon_text=instatoon_text,
+        page_title=f"{article.title} | MI Creator OS",
+    )
 
 
+
+
+@app.post("/articles/<int:article_id>/instatoon/character-profile")
+def save_instatoon_character_profile(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    profile = {
+        "project_name": request.form.get("project_name", "").strip(),
+        "mother_name": request.form.get("mother_name", "").strip(),
+        "mother_appearance": request.form.get("mother_appearance", "").strip(),
+        "daughter_name": request.form.get("daughter_name", "").strip(),
+        "daughter_appearance": request.form.get("daughter_appearance", "").strip(),
+        "art_style": request.form.get("art_style", "").strip(),
+        "location_style": request.form.get("location_style", "").strip(),
+        "negative_rules": request.form.get("negative_rules", "").strip(),
+        "caption_style": request.form.get("caption_style", "").strip(),
+        "caption_font_size": request.form.get("caption_font_size", "").strip(),
+        "subtitle_font_size": request.form.get("subtitle_font_size", "").strip(),
+        "reference_priority": request.form.get("reference_priority", "").strip(),
+    }
+
+    default_profile = default_instatoon_character_profile()
+
+    for key, value in default_profile.items():
+        if not profile.get(key):
+            profile[key] = value
+
+    article.instatoon_character_profile = json.dumps(
+        profile,
+        ensure_ascii=False,
+    )
+
+    db.session.commit()
+    flash("인스타툰 캐릭터 설정을 저장했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/character-sheet")
+def generate_instatoon_character_sheet_route(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        profile = get_instatoon_character_profile(article)
+        style = request.form.get(
+            "character_sheet_style",
+            profile.get("art_style", "따뜻한 한국 웹툰 일러스트"),
+        ).strip()
+
+        old_filename = article.instatoon_character_sheet
+        filename = generate_instatoon_character_sheet(
+            article=article,
+            profile=profile,
+            style=style,
+            expression_hint=request.form.get("expression_hint", ""),
+        )
+
+        article.instatoon_character_sheet = filename
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_file = MEDIA_DIR / old_filename
+
+            if old_file.exists():
+                old_file.unlink()
+
+        flash("캐릭터 시트를 만들었습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"캐릭터 시트 생성 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/instatoon/rebuild-captions")
+def rebuild_instatoon_captions(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        cuts = get_instatoon_cuts(article)
+
+        raw_map = load_json_map(article.instatoon_images)
+        captioned_map = load_json_map(article.instatoon_captioned_images)
+        old_captioned_files = []
+
+        for cut_number, cut_text in enumerate(cuts, start=1):
+            raw_filename = raw_map.get(str(cut_number))
+
+            if not raw_filename:
+                continue
+
+            old_captioned = captioned_map.get(str(cut_number))
+            new_captioned = compose_instatoon_text_overlay(
+                article=article,
+                cut_number=cut_number,
+                source_filename=raw_filename,
+                cut_text=cut_text,
+            )
+
+            captioned_map[str(cut_number)] = new_captioned
+
+            if old_captioned and old_captioned != new_captioned:
+                old_captioned_files.append(old_captioned)
+
+        article.instatoon_captioned_images = json.dumps(
+            captioned_map,
+            ensure_ascii=False,
+        )
+
+        db.session.commit()
+        delete_replaced_media(*old_captioned_files)
+        flash("기존 그림에 한글 대사와 자막을 다시 입혔습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"한글 자막 다시 만들기 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/instatoon/reference-image")
+def upload_instatoon_reference_image(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        uploaded_file = request.files.get("reference_image")
+        old_filename = article.instatoon_reference_image
+        filename = save_reference_image_upload(
+            file_storage=uploaded_file,
+            article_id=article.id,
+        )
+
+        article.instatoon_reference_image = filename
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash(
+            "참조 이미지를 저장했습니다. "
+            "이제 컷 생성 시 해당 인물의 얼굴과 분위기를 우선 참고합니다."
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"참조 이미지 업로드 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/reference-image/delete")
+def delete_instatoon_reference_image(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_filename = article.instatoon_reference_image
+
+    article.instatoon_reference_image = None
+    db.session.commit()
+
+    if old_filename:
+        old_path = MEDIA_DIR / old_filename
+
+        if old_path.exists():
+            old_path.unlink()
+
+    flash("참조 이미지를 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/reels/create")
+def create_reels_video(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        old_filename = article.reels_path
+        filename, settings = make_reels_video(
+            article=article,
+            seconds_per_cut=request.form.get("seconds_per_cut", "3"),
+            fps=request.form.get("fps", "30"),
+            transition_seconds=request.form.get("transition_seconds", "0.35"),
+            motion_style=request.form.get("motion_style", "교차 줌"),
+        )
+
+        article.reels_path = filename
+        article.reels_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash(
+            f"릴스 영상 생성 완료! "
+            f"{settings.get('cut_count', 0)}컷을 세로형 MP4로 만들었습니다."
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"릴스 생성 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/reels/delete")
+def delete_reels_video(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_filename = article.reels_path
+
+    article.reels_path = None
+    article.reels_settings = "{}"
+    db.session.commit()
+
+    if old_filename:
+        old_path = MEDIA_DIR / old_filename
+
+        if old_path.exists():
+            old_path.unlink()
+
+    flash("생성된 릴스 영상을 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/instatoon/<int:cut_number>/audio-json")
+def generate_instatoon_cut_audio_json(article_id, cut_number):
+    article = Article.query.get_or_404(article_id)
+
+    mother_mood = request.form.get("mother_mood", "따뜻하고 자연스럽게")
+    daughter_mood = request.form.get("daughter_mood", "밝고 장난스럽게")
+    narration_mood = request.form.get("narration_mood", "편안하게 이야기하듯")
+
+    try:
+        old_entries, new_entries = generate_cut_audio(
+            article=article,
+            cut_number=cut_number,
+            mother_mood=mother_mood,
+            daughter_mood=daughter_mood,
+            narration_mood=narration_mood,
+        )
+
+        article.instatoon_audio_settings = json.dumps(
+            {
+                "mother_mood": mother_mood,
+                "daughter_mood": daughter_mood,
+                "narration_mood": narration_mood,
+                "model": TTS_MODEL,
+                "mother_voice": TTS_VOICES["mother"],
+                "daughter_voice": TTS_VOICES["daughter"],
+                "narration_voice": TTS_VOICES["narration"],
+            },
+            ensure_ascii=False,
+        )
+
+        db.session.commit()
+        delete_audio_entries(old_entries)
+
+        return {
+            "ok": True,
+            "cut_number": cut_number,
+            "entries": [
+                {
+                    **entry,
+                    "audio_url": url_for(
+                        "media",
+                        filename=entry["filename"],
+                    ),
+                }
+                for entry in new_entries
+            ],
+        }
+
+    except Exception as e:
+        db.session.rollback()
+
+        return {
+            "ok": False,
+            "cut_number": cut_number,
+            "message": str(e),
+        }, 500
+
+
+@app.post("/articles/<int:article_id>/instatoon/audio/delete")
+def delete_instatoon_audio(article_id):
+    article = Article.query.get_or_404(article_id)
+    audio_map = load_json_map(article.instatoon_audio)
+
+    for entries in audio_map.values():
+        delete_audio_entries(entries)
+
+    article.instatoon_audio = "{}"
+    article.instatoon_audio_settings = "{}"
+    db.session.commit()
+    flash("인스타툰 음성을 모두 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/reels/create-with-voice")
+def create_reels_video_with_voice(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        old_filename = article.reels_voice_path
+        filename, settings = make_voice_reels_video(
+            article=article,
+            voice_volume=request.form.get("voice_volume", "1.0"),
+            cut_duration_override=request.form.get(
+                "voice_cut_duration",
+                "",
+            ),
+        )
+
+        article.reels_voice_path = filename
+        article.reels_voice_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash(
+            f"음성 포함 릴스 생성 완료! "
+            f"{settings.get('cut_count', 0)}컷 음성을 영상에 배치했습니다."
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"음성 포함 릴스 생성 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/reels/delete-with-voice")
+def delete_reels_video_with_voice(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_filename = article.reels_voice_path
+
+    article.reels_voice_path = None
+    article.reels_voice_settings = "{}"
+    db.session.commit()
+
+    if old_filename:
+        old_path = MEDIA_DIR / old_filename
+
+        if old_path.exists():
+            old_path.unlink()
+
+    flash("음성 포함 릴스 영상을 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/reels/bgm/upload")
+def upload_reels_bgm(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        uploaded_file = request.files.get("bgm_file")
+        old_filename = article.reels_bgm_path
+        filename = save_bgm_upload(
+            file_storage=uploaded_file,
+            article_id=article.id,
+        )
+
+        article.reels_bgm_path = filename
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash("BGM 파일을 저장했습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"BGM 업로드 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/reels/bgm/delete")
+def delete_reels_bgm(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_bgm = article.reels_bgm_path
+    old_final = article.reels_final_path
+
+    article.reels_bgm_path = None
+    article.reels_final_path = None
+    article.reels_final_settings = "{}"
+    db.session.commit()
+
+    for filename in [old_bgm, old_final]:
+        if not filename:
+            continue
+
+        path = MEDIA_DIR / filename
+
+        if path.exists():
+            path.unlink()
+
+    flash("BGM과 최종 릴스 파일을 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/reels/create-final")
+def create_final_reels_video(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        old_filename = article.reels_final_path
+        filename, settings = make_final_reels_with_bgm(
+            article=article,
+            bgm_volume=request.form.get("bgm_volume", "0.16"),
+            voice_volume=request.form.get("final_voice_volume", "1.0"),
+            bgm_start_seconds=request.form.get(
+                "bgm_start_seconds",
+                "0",
+            ),
+        )
+
+        article.reels_final_path = filename
+        article.reels_final_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash("음성·BGM이 포함된 최종 릴스를 만들었습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"최종 릴스 생성 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/reels/delete-final")
+def delete_final_reels_video(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_filename = article.reels_final_path
+
+    article.reels_final_path = None
+    article.reels_final_settings = "{}"
+    db.session.commit()
+
+    if old_filename:
+        old_path = MEDIA_DIR / old_filename
+
+        if old_path.exists():
+            old_path.unlink()
+
+    flash("최종 릴스 영상을 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/export-package/create")
+def create_content_export_package(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        old_filename = article.export_package_path
+        filename, settings = create_export_package(
+            article=article,
+            include_raw=request.form.get("include_raw") == "1",
+            include_audio=request.form.get("include_audio") == "1",
+        )
+
+        article.export_package_path = filename
+        article.export_package_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            old_path = MEDIA_DIR / old_filename
+
+            if old_path.exists():
+                old_path.unlink()
+
+        flash("콘텐츠 전체 ZIP 패키지를 만들었습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"ZIP 패키지 생성 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/export-package/delete")
+def delete_content_export_package(article_id):
+    article = Article.query.get_or_404(article_id)
+    old_filename = article.export_package_path
+
+    article.export_package_path = None
+    article.export_package_settings = "{}"
+    db.session.commit()
+
+    if old_filename:
+        old_path = MEDIA_DIR / old_filename
+
+        if old_path.exists():
+            old_path.unlink()
+
+    flash("콘텐츠 ZIP 패키지를 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/instatoon/presets/save")
+def save_instatoon_preset(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        name = request.form.get("preset_name", "").strip()
+        description = request.form.get("preset_description", "").strip()
+
+        if not name:
+            raise ValueError("프리셋 이름을 입력해 주세요.")
+
+        profile = get_instatoon_character_profile(article)
+        existing = InstatoonPreset.query.filter_by(name=name).first()
+
+        if existing:
+            preset = existing
+            old_reference = preset.reference_image
+            old_sheet = preset.character_sheet
+        else:
+            preset = InstatoonPreset(name=name)
+            db.session.add(preset)
+            old_reference = None
+            old_sheet = None
+
+        preset.description = description
+        preset.profile_json = json.dumps(
+            profile,
+            ensure_ascii=False,
+        )
+
+        copied_reference = copy_media_file(
+            article.instatoon_reference_image,
+            f"preset_reference_{safe_zip_name(name)}",
+        )
+        copied_sheet = copy_media_file(
+            article.instatoon_character_sheet,
+            f"preset_sheet_{safe_zip_name(name)}",
+        )
+
+        if copied_reference:
+            preset.reference_image = copied_reference
+
+        if copied_sheet:
+            preset.character_sheet = copied_sheet
+
+        db.session.commit()
+
+        if copied_reference and old_reference != copied_reference:
+            delete_media_if_exists(old_reference)
+
+        if copied_sheet and old_sheet != copied_sheet:
+            delete_media_if_exists(old_sheet)
+
+        flash(f"‘{name}’ 프리셋을 저장했습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"프리셋 저장 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/presets/<int:preset_id>/apply")
+def apply_instatoon_preset(article_id, preset_id):
+    article = Article.query.get_or_404(article_id)
+    preset = InstatoonPreset.query.get_or_404(preset_id)
+
+    try:
+        old_reference = article.instatoon_reference_image
+        old_sheet = article.instatoon_character_sheet
+
+        article.instatoon_character_profile = json.dumps(
+            preset_profile(preset),
+            ensure_ascii=False,
+        )
+
+        copied_reference = copy_media_file(
+            preset.reference_image,
+            f"article_{article.id}_reference_from_preset",
+        )
+        copied_sheet = copy_media_file(
+            preset.character_sheet,
+            f"article_{article.id}_sheet_from_preset",
+        )
+
+        if copied_reference:
+            article.instatoon_reference_image = copied_reference
+
+        if copied_sheet:
+            article.instatoon_character_sheet = copied_sheet
+
+        db.session.commit()
+
+        if copied_reference and old_reference != copied_reference:
+            delete_media_if_exists(old_reference)
+
+        if copied_sheet and old_sheet != copied_sheet:
+            delete_media_if_exists(old_sheet)
+
+        flash(f"‘{preset.name}’ 프리셋을 적용했습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"프리셋 적용 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/presets/<int:preset_id>/delete")
+def delete_instatoon_preset(article_id, preset_id):
+    article = Article.query.get_or_404(article_id)
+    preset = InstatoonPreset.query.get_or_404(preset_id)
+
+    reference_filename = preset.reference_image
+    sheet_filename = preset.character_sheet
+    preset_name = preset.name
+
+    db.session.delete(preset)
+    db.session.commit()
+
+    delete_media_if_exists(reference_filename)
+    delete_media_if_exists(sheet_filename)
+
+    flash(f"‘{preset_name}’ 프리셋을 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.post("/articles/<int:article_id>/instatoon/director/analyze")
+def analyze_instatoon_direction(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        tone = request.form.get("director_tone", "공감형").strip()
+        intensity = request.form.get("director_intensity", "보통").strip()
+
+        result = generate_director_revision(
+            article=article,
+            tone=tone,
+            intensity=intensity,
+        )
+
+        article.director_report = json.dumps(
+            {
+                "score": result.get("score", 0),
+                "summary": result.get("summary", ""),
+                "strengths": result.get("strengths", []),
+                "problems": result.get("problems", []),
+                "directing_notes": result.get("directing_notes", []),
+                "tone": tone,
+                "intensity": intensity,
+            },
+            ensure_ascii=False,
+        )
+        article.director_revised_instatoon = result.get(
+            "revised_instatoon",
+            "",
+        )
+
+        db.session.commit()
+        flash("AI 연출 감독이 8컷을 분석하고 수정안을 만들었습니다.")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"AI 연출 분석 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/director/apply")
+def apply_instatoon_direction(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        revised = (article.director_revised_instatoon or "").strip()
+
+        if not revised:
+            raise ValueError("적용할 연출 수정안이 없습니다.")
+
+        cut_count = len([
+            chunk
+            for chunk in revised.split("[CUT]")
+            if "컷 번호" in chunk
+        ])
+
+        if cut_count != 8:
+            raise ValueError(
+                f"수정안이 정확히 8컷이 아닙니다. 현재 {cut_count}컷입니다."
+            )
+
+        replace_instatoon_text(article, revised)
+
+        if request.form.get("clear_generated_assets") == "1":
+            clear_instatoon_generated_assets(article)
+
+        db.session.commit()
+        flash(
+            "AI 연출 수정안을 인스타툰에 적용했습니다. "
+            "이미지를 다시 생성하면 새 연출이 반영됩니다."
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"연출 수정안 적용 실패: {e}")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+@app.post("/articles/<int:article_id>/instatoon/director/delete")
+def delete_instatoon_direction(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    article.director_report = "{}"
+    article.director_revised_instatoon = ""
+    db.session.commit()
+    flash("AI 연출 분석 결과를 삭제했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+
+
+@app.get("/articles/<int:article_id>/production/status")
+def production_queue_status(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    return {
+        "ok": True,
+        "state": load_json_map(article.production_queue_state),
+        "snapshot": production_queue_snapshot(article),
+    }
+
+
+@app.post("/articles/<int:article_id>/production/reels-json")
+def production_create_reels_json(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        save_queue_state(article, "reels", "running", "기본 릴스 생성 중")
+        db.session.commit()
+
+        old_filename = article.reels_path
+        filename, settings = make_reels_video(
+            article=article,
+            seconds_per_cut=request.form.get("seconds_per_cut", "3"),
+            fps=request.form.get("fps", "30"),
+            transition_seconds=request.form.get(
+                "transition_seconds",
+                "0.35",
+            ),
+            motion_style=request.form.get(
+                "motion_style",
+                "교차 줌",
+            ),
+        )
+
+        article.reels_path = filename
+        article.reels_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        save_queue_state(article, "reels", "done", "기본 릴스 생성 완료")
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            delete_media_if_exists(old_filename)
+
+        return {
+            "ok": True,
+            "filename": filename,
+            "video_url": url_for("media", filename=filename),
+            "snapshot": production_queue_snapshot(article),
+        }
+
+    except Exception as e:
+        db.session.rollback()
+        article = Article.query.get_or_404(article_id)
+        save_queue_state(article, "reels", "error", str(e))
+        db.session.commit()
+
+        return {
+            "ok": False,
+            "message": str(e),
+        }, 500
+
+
+@app.post("/articles/<int:article_id>/production/reels-voice-json")
+def production_create_voice_reels_json(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        save_queue_state(
+            article,
+            "reels_voice",
+            "running",
+            "음성 포함 릴스 생성 중",
+        )
+        db.session.commit()
+
+        old_filename = article.reels_voice_path
+        filename, settings = make_voice_reels_video(
+            article=article,
+            voice_volume=request.form.get("voice_volume", "1.0"),
+            cut_duration_override=request.form.get(
+                "voice_cut_duration",
+                "",
+            ),
+        )
+
+        article.reels_voice_path = filename
+        article.reels_voice_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        save_queue_state(
+            article,
+            "reels_voice",
+            "done",
+            "음성 포함 릴스 생성 완료",
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            delete_media_if_exists(old_filename)
+
+        return {
+            "ok": True,
+            "filename": filename,
+            "video_url": url_for("media", filename=filename),
+            "snapshot": production_queue_snapshot(article),
+        }
+
+    except Exception as e:
+        db.session.rollback()
+        article = Article.query.get_or_404(article_id)
+        save_queue_state(article, "reels_voice", "error", str(e))
+        db.session.commit()
+
+        return {
+            "ok": False,
+            "message": str(e),
+        }, 500
+
+
+@app.post("/articles/<int:article_id>/production/reels-final-json")
+def production_create_final_reels_json(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        if not article.reels_bgm_path:
+            return {
+                "ok": True,
+                "skipped": True,
+                "message": "BGM이 없어 최종 마스터링을 건너뜁니다.",
+                "snapshot": production_queue_snapshot(article),
+            }
+
+        save_queue_state(
+            article,
+            "reels_final",
+            "running",
+            "최종 릴스 마스터링 중",
+        )
+        db.session.commit()
+
+        old_filename = article.reels_final_path
+        filename, settings = make_final_reels_with_bgm(
+            article=article,
+            bgm_volume=request.form.get("bgm_volume", "0.16"),
+            voice_volume=request.form.get(
+                "final_voice_volume",
+                "1.0",
+            ),
+            bgm_start_seconds=request.form.get(
+                "bgm_start_seconds",
+                "0",
+            ),
+        )
+
+        article.reels_final_path = filename
+        article.reels_final_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        save_queue_state(
+            article,
+            "reels_final",
+            "done",
+            "최종 릴스 마스터링 완료",
+        )
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            delete_media_if_exists(old_filename)
+
+        return {
+            "ok": True,
+            "filename": filename,
+            "video_url": url_for("media", filename=filename),
+            "snapshot": production_queue_snapshot(article),
+        }
+
+    except Exception as e:
+        db.session.rollback()
+        article = Article.query.get_or_404(article_id)
+        save_queue_state(article, "reels_final", "error", str(e))
+        db.session.commit()
+
+        return {
+            "ok": False,
+            "message": str(e),
+        }, 500
+
+
+@app.post("/articles/<int:article_id>/production/export-json")
+def production_create_export_json(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    try:
+        save_queue_state(article, "zip", "running", "ZIP 패키지 생성 중")
+        db.session.commit()
+
+        old_filename = article.export_package_path
+        filename, settings = create_export_package(
+            article=article,
+            include_raw=request.form.get("include_raw", "1") == "1",
+            include_audio=request.form.get("include_audio", "1") == "1",
+        )
+
+        article.export_package_path = filename
+        article.export_package_settings = json.dumps(
+            settings,
+            ensure_ascii=False,
+        )
+        save_queue_state(article, "zip", "done", "ZIP 패키지 생성 완료")
+        db.session.commit()
+
+        if old_filename and old_filename != filename:
+            delete_media_if_exists(old_filename)
+
+        return {
+            "ok": True,
+            "filename": filename,
+            "download_url": url_for("media", filename=filename),
+            "snapshot": production_queue_snapshot(article),
+        }
+
+    except Exception as e:
+        db.session.rollback()
+        article = Article.query.get_or_404(article_id)
+        save_queue_state(article, "zip", "error", str(e))
+        db.session.commit()
+
+        return {
+            "ok": False,
+            "message": str(e),
+        }, 500
+
+
+@app.post("/articles/<int:article_id>/production/reset")
+def reset_production_queue(article_id):
+    article = Article.query.get_or_404(article_id)
+    article.production_queue_state = "{}"
+    db.session.commit()
+    flash("원클릭 제작 진행 기록을 초기화했습니다.")
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
 
 
 @app.post("/articles/<int:article_id>/pipeline")
 def run_pipeline(article_id):
     article = Article.query.get_or_404(article_id)
+
     try:
         article.seo_score, report = analyze_seo(article)
         article.seo_report = json.dumps(report, ensure_ascii=False)
 
         social = generate_social_pack(article)
+
         article.instagram_caption = social.get("instagram_caption", "")
         article.threads_text = social.get("threads_text", "")
         article.shorts_script = social.get("shorts_script", "")
+        article.youtube_title = social.get("youtube_title", "")
+        article.youtube_description = social.get("youtube_description", "")
+        article.youtube_tags = social.get("youtube_tags", "")
+        article.tiktok_caption = social.get("tiktok_caption", "")
 
-        style = request.form.get("thumbnail_style", "따뜻한 생활 사진")
+        replace_instatoon_text(article, social.get("instatoon", ""))
+
+        article.thumbnail_text = social.get(
+            "thumbnail_text",
+            article.thumbnail_text or article.title,
+        )
+
+        style = request.form.get(
+            "thumbnail_style",
+            "따뜻한 생활 사진",
+        )
         thumbnail_text = article.thumbnail_text or article.title
         old_path = article.thumbnail_path
-        article.thumbnail_path = generate_thumbnail(article, style, thumbnail_text)
+
+        article.thumbnail_path = generate_thumbnail(
+            article,
+            style,
+            thumbnail_text,
+        )
         article.thumbnail_text = thumbnail_text
 
         db.session.commit()
@@ -1011,11 +4617,74 @@ def run_pipeline(article_id):
             if old_file.exists():
                 old_file.unlink()
 
-        flash("AI 콘텐츠 파이프라인이 완료됐어요. 블로그, SNS, 썸네일까지 준비했습니다.")
+        flash(
+            "AI 콘텐츠 파이프라인이 완료됐어요. "
+            "블로그, SNS, 인스타툰, 썸네일까지 준비했습니다."
+        )
+
     except Exception as e:
         db.session.rollback()
         flash(f"파이프라인 실행 실패: {e}")
-    return redirect(url_for("edit_article", article_id=article.id))
+
+    return redirect(
+        url_for("edit_article", article_id=article.id)
+        + "#instatoon"
+    )
+
+@app.post("/articles/<int:article_id>/instatoon/<int:cut_number>/image")
+def generate_instatoon_cut_image(article_id, cut_number):
+    article = Article.query.get_or_404(article_id)
+    try:
+        cuts = get_instatoon_cuts(article)
+        if cut_number < 1 or cut_number > len(cuts):
+            raise ValueError("선택한 인스타툰 컷을 찾을 수 없습니다.")
+        style=request.form.get("instatoon_style","따뜻한 한국 웹툰 일러스트")
+        cut_text=cuts[cut_number-1]
+        filename=generate_instatoon_image(article=article,cut_number=cut_number,cut_text=cut_text,style=style)
+        versions=save_instatoon_image_versions(article=article,cut_number=cut_number,raw_filename=filename,cut_text=cut_text)
+        db.session.commit()
+        delete_replaced_media(versions["old_raw"] if versions["old_raw"]!=versions["raw_filename"] else None,versions["old_captioned"] if versions["old_captioned"]!=versions["captioned_filename"] else None)
+        flash(f"인스타툰 {cut_number}컷 이미지를 만들었습니다.")
+    except Exception as e:
+        db.session.rollback(); flash(f"인스타툰 이미지 생성 실패: {e}")
+    return redirect(url_for("edit_article",article_id=article.id)+"#instatoon")
+
+
+@app.post("/articles/<int:article_id>/instatoon/all")
+def generate_all_instatoon_images(article_id):
+    article=Article.query.get_or_404(article_id)
+    try:
+        cuts=get_instatoon_cuts(article)
+        if len(cuts)!=8:
+            raise ValueError(f"인스타툰은 정확히 8컷이어야 합니다. 현재 {len(cuts)}컷입니다.")
+        style=request.form.get("instatoon_style","따뜻한 한국 웹툰 일러스트")
+        replaced=[]
+        for number,cut_text in enumerate(cuts,start=1):
+            filename=generate_instatoon_image(article=article,cut_number=number,cut_text=cut_text,style=style)
+            versions=save_instatoon_image_versions(article=article,cut_number=number,raw_filename=filename,cut_text=cut_text)
+            replaced += [versions["old_raw"] if versions["old_raw"]!=versions["raw_filename"] else None,versions["old_captioned"] if versions["old_captioned"]!=versions["captioned_filename"] else None]
+        db.session.commit(); delete_replaced_media(*replaced); flash("인스타툰 8컷 이미지 생성을 완료했습니다.")
+    except Exception as e:
+        db.session.rollback(); flash(f"인스타툰 전체 이미지 생성 실패: {e}")
+    return redirect(url_for("edit_article",article_id=article.id)+"#instatoon")
+
+
+@app.post("/articles/<int:article_id>/instatoon/<int:cut_number>/image-json")
+def generate_instatoon_cut_image_json(article_id,cut_number):
+    article=Article.query.get_or_404(article_id)
+    try:
+        cuts=get_instatoon_cuts(article)
+        if cut_number<1 or cut_number>len(cuts):
+            return {"ok":False,"message":"선택한 인스타툰 컷을 찾을 수 없습니다."},400
+        style=request.form.get("instatoon_style","따뜻한 한국 웹툰 일러스트")
+        cut_text=cuts[cut_number-1]
+        filename=generate_instatoon_image(article=article,cut_number=cut_number,cut_text=cut_text,style=style)
+        versions=save_instatoon_image_versions(article=article,cut_number=cut_number,raw_filename=filename,cut_text=cut_text)
+        db.session.commit()
+        delete_replaced_media(versions["old_raw"] if versions["old_raw"]!=versions["raw_filename"] else None,versions["old_captioned"] if versions["old_captioned"]!=versions["captioned_filename"] else None)
+        return {"ok":True,"cut_number":cut_number,"filename":filename,"image_url":url_for("media",filename=filename),"captioned_filename":versions["captioned_filename"],"captioned_image_url":url_for("media",filename=versions["captioned_filename"])}
+    except Exception as e:
+        db.session.rollback(); return {"ok":False,"cut_number":cut_number,"message":str(e)},500
 
 
 @app.post("/articles/<int:article_id>/checklist")
@@ -1092,7 +4761,7 @@ def idea_lab():
 <p class="small">아직 저장된 아이디어가 없습니다.</p>
 {% endif %}
 </section>
-""", ideas=ideas, page_title="AI 아이디어 연구소 | MI Creator Hub")
+""", ideas=ideas, page_title="AI 아이디어 연구소 | MI Creator OS")
 
 
 @app.post("/ideas/<int:idea_id>/article")
@@ -1134,6 +4803,39 @@ def idea_to_article(idea_id):
         return redirect(url_for("idea_lab"))
 
 
+@app.get("/articles/<int:article_id>/monetization/coupang-search")
+def coupang_product_search(article_id):
+    Article.query.get_or_404(article_id)  # 존재하지 않는 글이면 404
+
+    if not coupang_api_configured():
+        return jsonify({
+            "ok": False,
+            "message": (
+                "쿠팡파트너스 API 키가 아직 설정되지 않았어요. "
+                "환경변수에 COUPANG_ACCESS_KEY, COUPANG_SECRET_KEY를 "
+                "등록하면 이 검색 기능을 쓸 수 있어요."
+            ),
+            "results": [],
+        })
+
+    keyword = request.args.get("keyword", "").strip()
+    if not keyword:
+        return jsonify({"ok": False, "message": "검색어를 입력해 주세요.", "results": []})
+
+    results = coupang_search_products(keyword)
+    if not results:
+        return jsonify({
+            "ok": False,
+            "message": (
+                "검색 결과가 없거나 API 호출에 실패했어요. "
+                "(API 키 승인 조건 미충족이거나, 시간당 호출 제한 초과일 수 있어요.)"
+            ),
+            "results": [],
+        })
+
+    return jsonify({"ok": True, "message": "", "results": results})
+
+
 @app.post("/articles/<int:article_id>/monetization")
 def save_monetization(article_id):
     article = Article.query.get_or_404(article_id)
@@ -1142,12 +4844,16 @@ def save_monetization(article_id):
         article.coupang_link = valid_public_url(request.form.get("coupang_link", ""))
         article.atomy_product_name = request.form.get("atomy_product_name", "").strip()[:300]
         article.atomy_link = valid_public_url(request.form.get("atomy_link", ""))
+        article.toss_product_name = request.form.get("toss_product_name", "").strip()[:300]
+        article.toss_link = valid_public_url(request.form.get("toss_link", ""))
         article.affiliate_enabled = request.form.get("affiliate_enabled") == "1"
 
         if bool(article.coupang_product_name) != bool(article.coupang_link):
             raise ValueError("쿠팡 상품명과 링크는 둘 다 입력하거나 둘 다 비워주세요.")
         if bool(article.atomy_product_name) != bool(article.atomy_link):
             raise ValueError("애터미 상품명과 링크는 둘 다 입력하거나 둘 다 비워주세요.")
+        if bool(article.toss_product_name) != bool(article.toss_link):
+            raise ValueError("토스쇼핑 상품명과 링크는 둘 다 입력하거나 둘 다 비워주세요.")
 
         article.affiliate_html = build_affiliate_html(article)
         if article.affiliate_enabled and not article.affiliate_html:
@@ -1319,8 +5025,12 @@ def generate_social_route(article_id):
         article.instagram_caption = data.get("instagram_caption", "")
         article.threads_text = data.get("threads_text", "")
         article.shorts_script = data.get("shorts_script", "")
+        article.youtube_title = data.get("youtube_title", "")
+        article.youtube_description = data.get("youtube_description", "")
+        article.youtube_tags = data.get("youtube_tags", "")
+        article.tiktok_caption = data.get("tiktok_caption", "")
         db.session.commit()
-        flash("인스타그램, Threads, 쇼츠용 콘텐츠를 만들었어요.")
+        flash("인스타그램, Threads, 유튜브, 틱톡, 쇼츠용 콘텐츠를 만들었어요.")
     except Exception as e:
         db.session.rollback()
         flash(f"SNS 콘텐츠 생성 실패: {e}")
@@ -1447,12 +5157,37 @@ def content_calendar():
 {% endif %}
 </section>
 """, scheduled=scheduled, recent_logs=recent_logs,
-       page_title="콘텐츠 캘린더 | MI Creator Hub")
+       page_title="콘텐츠 캘린더 | MI Creator OS")
 
 
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "16.0.1"}
+
+
+@app.get("/healthz")
+def healthz():
+    database_ok = True
+    database_error = ""
+
+    try:
+        db.session.execute(db.text("SELECT 1"))
+    except Exception as error:
+        database_ok = False
+        database_error = str(error)
+
+    status_code = 200 if database_ok else 503
+
+    return {
+        "ok": database_ok,
+        "app": "MI Creator OS",
+        "version": globals().get("APP_VERSION", "V31"),
+        "database": "ok" if database_ok else "error",
+        "database_error": database_error,
+        "media_dir": str(MEDIA_DIR),
+        "media_dir_exists": MEDIA_DIR.exists(),
+        "timestamp": datetime.utcnow().isoformat(),
+    }, status_code
 
 
 if __name__ == "__main__":

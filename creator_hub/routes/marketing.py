@@ -248,7 +248,7 @@ def dashboard():
     return page("""
 <style>
 .bar-track{height:18px;border-radius:99px;background:#eef0f5;overflow:hidden;min-width:120px}
-.bar-fill{height:100%;background:linear-gradient(90deg,#4f46e5,#8b5cf6);border-radius:99px}
+.bar-fill{height:100%;background:#4b3f72;border-radius:99px}
 .metric-good{font-weight:700}
 .mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .mini-card{border:1px solid #e5e7eb;border-radius:13px;padding:12px;background:#fafafa}
@@ -388,7 +388,7 @@ def dashboard():
         days=days, brand=brand, brands=BRANDS, totals=totals,
         channels=channels, brand_rows=brand_rows, contents=contents,
         recommendations=recommendations, trend=trend,
-        page_title="AI 마케팅 센터 | MI Creator Hub",
+        page_title="AI 마케팅 센터 | MI Creator OS",
     )
 
 
@@ -502,7 +502,7 @@ def ideas():
         rows=rows, brands=BRANDS, content_types=CONTENT_TYPES,
         priorities=IDEA_PRIORITIES, statuses=IDEA_STATUSES,
         brand=brand, status=status,
-        page_title="콘텐츠 아이디어 뱅크 | MI Creator Hub",
+        page_title="콘텐츠 아이디어 뱅크 | MI Creator OS",
     )
 
 
@@ -593,7 +593,7 @@ def shooting():
       <div><strong>{{row.progress}}%</strong> <a class="btn" href="{{url_for('marketing_v14.edit_shooting', item_id=row.item.id)}}">체크하기</a></div>
     </div>
     <div style="height:8px;background:#eceef3;border-radius:99px;overflow:hidden;margin-top:10px">
-      <div style="height:100%;width:{{row.progress}}%;background:linear-gradient(90deg,#4f46e5,#8b5cf6)"></div>
+      <div style="height:100%;width:{{row.progress}}%;background:#4b3f72"></div>
     </div>
   </div>
   {% else %}
@@ -602,7 +602,7 @@ def shooting():
 </section>
 """,
         rows=rows,
-        page_title="촬영 체크리스트 | MI Creator Hub",
+        page_title="촬영 체크리스트 | MI Creator OS",
     )
 
 
@@ -667,7 +667,7 @@ def edit_shooting(item_id):
 </section>
 """,
         item=item, checklist=checklist, labels=labels,
-        page_title="촬영 준비 | MI Creator Hub",
+        page_title="촬영 준비 | MI Creator OS",
     )
 
 
@@ -771,5 +771,5 @@ def monthly_report():
         brand_rows=brand_rows, contents=contents, created_count=created_count,
         completed_count=completed_count, active_count=active_count,
         idea_count=idea_count, completion_rate=completion_rate,
-        page_title="월간 운영 리포트 | MI Creator Hub",
+        page_title="월간 운영 리포트 | MI Creator OS",
     )

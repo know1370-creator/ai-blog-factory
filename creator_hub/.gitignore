@@ -1,0 +1,28 @@
+# 실제 API 키 등 비밀값이 들어있는 파일 — 절대 GitHub에 올리면 안 됨
+.env
+.env.*
+!.env.example
+
+# Python 실행 중 자동으로 생기는 캐시/컴파일 파일
+__pycache__/
+*.pyc
+*.pyo
+
+# 가상환경 폴더 (보통 로컬에서 python -m venv venv 로 만든 폴더)
+venv/
+.venv/
+env/
+
+# 로컬 SQLite 데이터베이스 파일 (실제 운영 데이터는 Render의 DB에 있어야 함)
+*.db
+*.sqlite
+*.sqlite3
+
+# 업로드/생성된 미디어 파일 (용량이 크고 사람마다 달라서 저장소에 안 올리는 게 일반적)
+media/
+
+# 에디터/OS가 자동으로 만드는 잡파일
+.DS_Store
+.vscode/
+*.log
+*.backup

@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, flash, redirect, render_template_string, request, url_for
 from sqlalchemy import func
 
-from ..legacy_app import BASE_HTML, Article, db
+from ..legacy_app import BASE_HTML, Article, db, get_ai_usage_this_month
 from markupsafe import Markup
 
 
@@ -27,6 +27,7 @@ INCOME_CATEGORIES = {
     "adsense": "애드센스",
     "coupang": "쿠팡",
     "atomy": "애터미",
+    "toss": "토스쇼핑",
     "other_income": "기타 수익",
 }
 COST_CATEGORIES = {
@@ -69,6 +70,9 @@ def dashboard():
         FinanceEntry.entry_date.desc(), FinanceEntry.id.desc()
     ).limit(30).all()
 
+    ai_usage = get_ai_usage_this_month()
+    ai_usage_labels = {"text": "글·아이디어 생성", "image": "이미지 생성", "audio": "음성 생성"}
+
     return page("""
 <section class="card">
   <div class="actions" style="justify-content:space-between;margin-top:0">
@@ -84,6 +88,24 @@ def dashboard():
     <div class="stat"><strong>{{won(costs)}}</strong><span class="small">이번 달 총비용</span></div>
     <div class="stat"><strong>{{won(net_profit)}}</strong><span class="small">이번 달 순이익</span></div>
     <div class="stat"><strong>{{won(avg_cost)}}</strong><span class="small">글 1개당 평균비용</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>이번 달 AI 사용 현황 <span class="small">(자동 집계)</span></h2>
+  <p class="small">
+    OpenAI를 호출할 때마다 자동으로 횟수를 세요. 모델별 가격이 자주 바뀌어
+    정확한 달러 금액은 추정하지 않아요 — 실제 청구 금액은
+    <a href="https://platform.openai.com/usage" target="_blank">OpenAI 사용량 페이지</a>에서
+    확인하신 뒤, 왼쪽 "OpenAI 비용" 항목에 그 금액을 입력해 주세요.
+  </p>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    {% for key,label in ai_usage_labels.items() %}
+    <div class="stat">
+      <strong>{{ai_usage.get(key, 0)}}</strong>
+      <span class="small">{{label}}</span>
+    </div>
+    {% endfor %}
   </div>
 </section>
 
@@ -168,7 +190,9 @@ def dashboard():
         cost_categories=COST_CATEGORIES,
         all_categories=ALL_CATEGORIES,
         won=won,
-        page_title="MI Creator Hub · 수익 대시보드",
+        ai_usage=ai_usage,
+        ai_usage_labels=ai_usage_labels,
+        page_title="MI Creator OS · 수익 대시보드",
     )
 
 

@@ -379,7 +379,7 @@ def dashboard():
         reel_plans=reel_plans,
         experiment_rows=experiment_rows,
         channels=CHANNELS,
-        page_title="AI 콘텐츠 매니저 | MI Creator Hub",
+        page_title="AI 콘텐츠 매니저 | MI Creator OS",
     )
 
 
@@ -476,7 +476,7 @@ def hooks():
             "comments": "댓글유도형",
             "sales": "판매형",
         },
-        page_title="AI 훅 생성기 | MI Creator Hub",
+        page_title="AI 훅 생성기 | MI Creator OS",
     )
 
 
@@ -606,7 +606,7 @@ def reels():
         current=current,
         recent=recent,
         brands=BRANDS,
-        page_title="릴스 촬영 감독 | MI Creator Hub",
+        page_title="릴스 촬영 감독 | MI Creator OS",
     )
 
 
@@ -710,7 +710,7 @@ def experiments():
 """,
         rows=rows,
         channels=CHANNELS,
-        page_title="콘텐츠 실험실 | MI Creator Hub",
+        page_title="콘텐츠 실험실 | MI Creator OS",
     )
 
 
