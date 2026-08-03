@@ -2544,30 +2544,33 @@ def publish_to_instagram(image_url, caption):
 
     container_resp = requests.post(
         f"{INSTAGRAM_GRAPH_BASE}/{INSTAGRAM_ACCOUNT_ID}/media",
-        data={
+        params={"access_token": INSTAGRAM_ACCESS_TOKEN},
+        json={
             "image_url": image_url,
             "caption": caption,
-            "access_token": INSTAGRAM_ACCESS_TOKEN,
         },
+        headers={"Content-Type": "application/json"},
         timeout=30,
     )
     container_data = container_resp.json()
     if container_resp.status_code >= 400 or "id" not in container_data:
         raise RuntimeError(
-            f"게시물 준비 실패: {container_data.get('error', {}).get('message', container_data)}"
+            f"게시물 준비 실패: {container_data.get('error', container_data)}"
         )
 
     creation_id = container_data["id"]
 
     publish_resp = requests.post(
         f"{INSTAGRAM_GRAPH_BASE}/{INSTAGRAM_ACCOUNT_ID}/media_publish",
-        data={"creation_id": creation_id, "access_token": INSTAGRAM_ACCESS_TOKEN},
+        params={"access_token": INSTAGRAM_ACCESS_TOKEN},
+        json={"creation_id": creation_id},
+        headers={"Content-Type": "application/json"},
         timeout=30,
     )
     publish_data = publish_resp.json()
     if publish_resp.status_code >= 400 or "id" not in publish_data:
         raise RuntimeError(
-            f"게시 실패: {publish_data.get('error', {}).get('message', publish_data)}"
+            f"게시 실패: {publish_data.get('error', publish_data)}"
         )
 
     return publish_data["id"]
