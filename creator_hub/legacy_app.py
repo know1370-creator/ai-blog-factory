@@ -1025,6 +1025,14 @@ def get_korean_font(size, bold=True):
 
     # 정확한 파일명을 못 찾았으면, 시스템에 설치된 폰트 폴더 전체에서
     # 이름에 한글 폰트로 흔히 쓰이는 이름이 들어간 파일을 찾아봅니다.
+    # 주의: "gothic"만으로 판단하면 URW Gothic 같은 영어 전용 폰트까지
+    # 한글 폰트로 잘못 골라져서, 숫자·기호는 그려지고 한글만 안 보이는
+    # 문제가 생깁니다. 그래서 실제로 한글을 지원하는 폰트 이름만 매칭합니다.
+    korean_tags = (
+        "nanum", "noto", "cjk", "malgun", "unfont", "batang",
+        "dotum", "gulim", "gungsuh", "notosanskr", "notoseriffkr",
+        "notosanscjk", "pretendard", "spoqa",
+    )
     keyword = "bold" if bold else "regular"
     fallback_match = None
     for fonts_root in ("/usr/share/fonts", "/usr/local/share/fonts"):
@@ -1035,7 +1043,7 @@ def get_korean_font(size, bold=True):
             if font_file.suffix.lower() not in (".ttf", ".ttc", ".otf"):
                 continue
             name = font_file.name.lower()
-            if any(tag in name for tag in ("nanum", "noto", "cjk", "gothic", "malgun")):
+            if any(tag in name for tag in korean_tags):
                 if keyword in name:
                     return ImageFont.truetype(str(font_file), size=size)
                 if fallback_match is None:
