@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import requests
 import secrets
 import shutil
 import subprocess
@@ -66,6 +67,12 @@ db = SQLAlchemy(app)
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/blogger"]
+
+# 인스타그램 자동 게시 (Instagram API with Instagram Login, Standard Access —
+# 본인 계정에만 게시하는 용도라 메타 앱 심사 없이 바로 사용 가능합니다).
+INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
+INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com/v25.0"
 KST = ZoneInfo("Asia/Seoul")
 
 # 쿠팡파트너스 오픈API. 파트너스 사이트에서 API 키를 발급받은 뒤
@@ -2509,6 +2516,52 @@ def save_blogger_result(article, result, blog_id, mode):
         blogger_url=article.blogger_url,
     )
     db.session.commit()
+
+
+def instagram_configured():
+    return bool(INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID)
+
+
+def publish_to_instagram(image_url, caption):
+    """인스타그램에 이미지+캡션을 게시합니다. 2단계로 진행됩니다:
+    1) 미디어 컨테이너 생성 2) 그 컨테이너를 실제로 게시.
+    이미지는 반드시 인터넷에서 접근 가능한 공개 URL이어야 합니다
+    (인스타그램 서버가 그 URL로 직접 이미지를 가져가요)."""
+    if not instagram_configured():
+        raise RuntimeError(
+            "인스타그램이 아직 연결되지 않았어요. Render 환경변수에 "
+            "INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID를 등록해 주세요."
+        )
+
+    container_resp = requests.post(
+        f"{INSTAGRAM_GRAPH_BASE}/{INSTAGRAM_ACCOUNT_ID}/media",
+        data={
+            "image_url": image_url,
+            "caption": caption,
+            "access_token": INSTAGRAM_ACCESS_TOKEN,
+        },
+        timeout=30,
+    )
+    container_data = container_resp.json()
+    if container_resp.status_code >= 400 or "id" not in container_data:
+        raise RuntimeError(
+            f"게시물 준비 실패: {container_data.get('error', {}).get('message', container_data)}"
+        )
+
+    creation_id = container_data["id"]
+
+    publish_resp = requests.post(
+        f"{INSTAGRAM_GRAPH_BASE}/{INSTAGRAM_ACCOUNT_ID}/media_publish",
+        data={"creation_id": creation_id, "access_token": INSTAGRAM_ACCESS_TOKEN},
+        timeout=30,
+    )
+    publish_data = publish_resp.json()
+    if publish_resp.status_code >= 400 or "id" not in publish_data:
+        raise RuntimeError(
+            f"게시 실패: {publish_data.get('error', {}).get('message', publish_data)}"
+        )
+
+    return publish_data["id"]
 
 
 def upsert_blogger_post(article, blog_id, mode="draft"):
@@ -5037,6 +5090,46 @@ def generate_social_route(article_id):
     return redirect(url_for("edit_article", article_id=article.id))
 
 
+@app.post("/articles/<int:article_id>/publish-instagram")
+def publish_instagram_route(article_id):
+    article = Article.query.get_or_404(article_id)
+
+    if not article.instagram_caption:
+        flash("먼저 인스타그램 캡션을 생성해 주세요.")
+        return redirect(url_for("edit_article", article_id=article.id))
+
+    # 게시할 이미지를 고릅니다: 썸네일이 있으면 썸네일, 없으면 인스타툰
+    # 1컷(글씨 있는 버전)을 사용합니다.
+    image_filename = article.thumbnail_path
+    if not image_filename and article.instatoon_captioned_images:
+        try:
+            images_map = json.loads(article.instatoon_captioned_images)
+            image_filename = images_map.get("1") or next(iter(images_map.values()), None)
+        except (json.JSONDecodeError, TypeError):
+            image_filename = None
+
+    if not image_filename:
+        flash("게시할 이미지가 없어요. 썸네일이나 인스타툰 이미지를 먼저 만들어 주세요.")
+        return redirect(url_for("edit_article", article_id=article.id))
+
+    image_url = url_for("media", filename=image_filename, _external=True)
+
+    try:
+        media_id = publish_to_instagram(image_url, article.instagram_caption)
+        add_publish_log(article, "인스타그램 게시", "성공", f"media_id={media_id}")
+        db.session.commit()
+        flash("인스타그램에 게시했어요! 몇 분 안에 실제 게시물이 보일 거예요.")
+    except Exception as e:
+        try:
+            add_publish_log(article, "인스타그램 게시", "실패", str(e))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        flash(f"인스타그램 게시 실패: {e}")
+
+    return redirect(url_for("edit_article", article_id=article.id))
+
+
 @app.post("/articles/<int:article_id>/schedule")
 def schedule_blogger(article_id):
     article = Article.query.get_or_404(article_id)
@@ -5095,6 +5188,83 @@ def publish_due_articles():
             failed.append({"id": article.id, "error": str(e)})
 
     return {"ok": True, "published": published, "failed": failed}
+
+
+# 매일 아침 자동으로 "오늘의 운세" 글 + SNS 콘텐츠를 만들어주는 작업입니다.
+# /tasks/publish-due 와 완전히 같은 방식(CRON_SECRET)으로 보호되어 있어요.
+# 매일 안 겹치게, 요일별로 다른 주제를 순서대로 돌려씁니다.
+FORTUNE_DAILY_TOPICS = [
+    "오늘의 12띠 운세 총정리",
+    "오늘의 별자리 운세",
+    "이번 주 재물운 좋은 띠 TOP3",
+    "오늘 연애운 좋은 별자리",
+    "오늘 조심해야 할 띠 운세",
+    "오늘의 행운의 컬러와 아이템",
+    "오늘 인간관계운이 좋은 별자리",
+]
+
+
+@app.route("/tasks/generate-daily-fortune", methods=["GET", "POST"])
+def generate_daily_fortune():
+    expected = os.getenv("CRON_SECRET", "")
+    supplied = request.headers.get("X-Cron-Secret") or request.args.get("secret", "")
+    if not expected or not secrets.compare_digest(expected, supplied):
+        return {"ok": False, "error": "unauthorized"}, 401
+
+    today = datetime.utcnow().date()
+    topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
+    keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
+
+    try:
+        data = generate_article(
+            keyword=keyword,
+            brand_style="운세·라이프스타일",
+            article_type="정보형",
+            length="약 1,500자",
+            audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
+            notes=(
+                "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
+                "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 "
+                "조언처럼 들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' "
+                "같은 안내를 자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, "
+                "정확한 금액 등)는 만들어내지 않는다."
+            ),
+        )
+
+        tags = data.get("tags", [])
+        if isinstance(tags, list):
+            tags = ",".join(str(t).strip().lstrip("#") for t in tags if str(t).strip())
+
+        article = Article(
+            keyword=keyword,
+            title=data.get("title", keyword),
+            meta_description=data.get("meta_description", ""),
+            body_html=data.get("body_html", ""),
+            brand_style="운세·라이프스타일",
+            article_type="정보형",
+            audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
+            tags=tags,
+        )
+        db.session.add(article)
+        db.session.flush()
+
+        article.seo_score, report = analyze_seo(article)
+        article.seo_report = json.dumps(report, ensure_ascii=False)
+
+        social = generate_social_pack(article)
+        article.instagram_caption = social.get("instagram_caption", "")
+        article.threads_text = social.get("threads_text", "")
+        article.shorts_script = social.get("shorts_script", "")
+        article.youtube_title = social.get("youtube_title", "")
+        article.youtube_description = social.get("youtube_description", "")
+        article.youtube_tags = social.get("youtube_tags", "")
+        article.tiktok_caption = social.get("tiktok_caption", "")
+
+        db.session.commit()
+        return {"ok": True, "article_id": article.id, "title": article.title, "topic": topic}
+    except Exception as e:
+        db.session.rollback()
+        return {"ok": False, "error": str(e)}, 500
 
 
 

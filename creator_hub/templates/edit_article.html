@@ -244,6 +244,9 @@ html{scroll-behavior:smooth}
         >
           인스타 캡션 복사
         </button>
+        <form method="post" action="{{ url_for('publish_instagram_route', article_id=a.id) }}" style="margin-top:8px" onsubmit="return confirm('지금 바로 인스타그램에 게시할까요? 게시 후에는 취소할 수 없어요.')">
+          <button class="btn green" type="submit">📸 인스타그램에 바로 게시하기</button>
+        </form>
       {% else %}
         <p class="small">아직 생성된 인스타그램 캡션이 없습니다.</p>
       {% endif %}

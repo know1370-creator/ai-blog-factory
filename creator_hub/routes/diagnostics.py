@@ -68,6 +68,7 @@ def dashboard():
     checks.extend([
         ("OpenAI 키", configured("OPENAI_API_KEY"), "설정됨" if configured("OPENAI_API_KEY") else "미설정"),
         ("쿠팡파트너스 API 키", configured("COUPANG_ACCESS_KEY") and configured("COUPANG_SECRET_KEY"), "설정됨" if configured("COUPANG_ACCESS_KEY") and configured("COUPANG_SECRET_KEY") else "미설정 (수동 입력으로 대체됨)"),
+        ("인스타그램 자동 게시", configured("INSTAGRAM_ACCESS_TOKEN") and configured("INSTAGRAM_ACCOUNT_ID"), "연결됨" if configured("INSTAGRAM_ACCESS_TOKEN") and configured("INSTAGRAM_ACCOUNT_ID") else "미연결 (토큰 60일마다 재발급 필요)"),
         ("Blogger Client ID", configured("GOOGLE_CLIENT_ID"), "설정됨" if configured("GOOGLE_CLIENT_ID") else "미설정"),
         ("Blogger Client Secret", configured("GOOGLE_CLIENT_SECRET"), "설정됨" if configured("GOOGLE_CLIENT_SECRET") else "미설정"),
         ("앱 Secret Key", configured("SECRET_KEY"), "설정됨" if configured("SECRET_KEY") else "서버 재시작 시 세션이 바뀔 수 있음"),
