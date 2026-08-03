@@ -110,6 +110,7 @@ class Article(db.Model):
     seo_report = db.Column(db.Text, default="{}")
     thumbnail_path = db.Column(db.String(500), nullable=True)
     fortune_card_path = db.Column(db.String(500), nullable=True)
+    fortune_card_paths = db.Column(db.Text, default="")  # JSON 리스트, 카드뉴스 여러 장
     thumbnail_text = db.Column(db.String(300), nullable=True)
     blogger_post_id = db.Column(db.String(200), nullable=True)
     blogger_blog_id = db.Column(db.String(200), nullable=True)
@@ -222,6 +223,7 @@ def ensure_schema():
         "shorts_script": "TEXT",
         "youtube_title": "VARCHAR(300)",
         "fortune_card_path": "VARCHAR(500)",
+        "fortune_card_paths": "TEXT",
         "youtube_description": "TEXT",
         "youtube_tags": "VARCHAR(500)",
         "tiktok_caption": "TEXT",
@@ -455,113 +457,295 @@ def generate_thumbnail(article, style, thumbnail_text):
     return filename
 
 
-def generate_fortune_card_items(article):
-    """글 내용을 바탕으로 카드 이미지에 넣을 짧은 운세 항목
-    (라벨 + 한 줄 요약) 4~6개를 만듭니다. 인스타그램 등에 이미지로
-    바로 올릴 수 있는 정보 카드를 만들기 위한 용도입니다."""
+ZODIAC_ANIMALS = ["쥐", "소", "범", "토끼", "용", "뱀", "말", "양", "원숭이", "닭", "개", "돼지"]
+ZODIAC_ANIMALS_EN = {
+    "쥐": "rat", "소": "ox", "범": "tiger", "토끼": "rabbit", "용": "dragon",
+    "뱀": "snake", "말": "horse", "양": "goat", "원숭이": "monkey",
+    "닭": "rooster", "개": "dog", "돼지": "pig",
+}
+ZODIAC_BOX_COLORS = [(70, 140, 255), (170, 110, 255), (235, 80, 80)]
+
+
+def zodiac_birth_years(animal, count=4, reference_year=None):
+    """해당 띠에 해당하는 최근 출생연도 4개를 계산합니다(1900년=쥐띠 기준
+    12년 주기). 올해는 제외하고 그 이전 연도들로 계산합니다."""
+    reference_year = (reference_year or datetime.utcnow().year) - 1
+    idx = ZODIAC_ANIMALS.index(animal)
+    years = []
+    year = reference_year
+    while len(years) < count:
+        if (year - 1900) % 12 == idx:
+            years.append(year)
+        year -= 1
+    return years
+
+
+def get_zodiac_icon(animal):
+    """12띠 아이콘은 매일 내용이 바뀌지 않는 그림이라, 한 번만 만들고
+    계속 재사용합니다(파일이 이미 있으면 새로 안 만듭니다)."""
+    filename = f"zodiac_icon_{animal}.png"
+    path = MEDIA_DIR / filename
+    if path.exists():
+        return filename
+
+    animal_en = ZODIAC_ANIMALS_EN.get(animal, animal)
     prompt = f"""
-다음은 오늘의 운세/라이프스타일 콘텐츠 글입니다. 이 글 내용을 바탕으로,
-인스타그램 카드 이미지 안에 넣을 짧은 항목을 만드세요.
+A cute, clean circular badge illustration of a {animal_en}, for a
+Korean 12-zodiac (십이지신) fortune card series. Friendly, semi-flat
+illustration style, centered, filling most of the frame. Warm gold
+and deep-navy color accents. No text, no letters, no numbers, no
+watermark. Square 1:1 image.
+"""
+    result = openai_client().images.generate(
+        model=IMAGE_MODEL, prompt=prompt, size="1024x1024", quality="medium"
+    )
+    log_ai_usage("image")
+    image_b64 = result.data[0].b64_json
+    if not image_b64:
+        raise RuntimeError(f"{animal}띠 아이콘 생성에 실패했습니다.")
+    path.write_bytes(base64.b64decode(image_b64))
+    return filename
+
+
+def generate_zodiac_fortune_texts(article):
+    """12간지 전부에 대해 오늘의 운세를 4줄씩 만듭니다(한 번의 AI
+    요청으로 12개를 다 만들어서 비용을 아낍니다)."""
+    prompt = f"""
+다음은 오늘의 띠별 운세 콘텐츠 글입니다. 이 글의 전체적인 톤을
+참고해서, 12간지 각 띠에 대해 오늘의 운세를 4줄씩 새로 작성하세요.
 
 제목: {article.title}
 본문: {plain_text_from_html(article.body_html)[:2000]}
 
 규칙:
-- 4~6개 항목
-- 각 항목은 "label"(예: 쥐띠, 물병자리 등 - 글 내용에 맞게. 띠/별자리
-  얘기가 아닌 글이면 핵심 키워드나 소제목으로 대체)과 "blurb"(15자
-  이내, 카드에 들어갈 아주 짧은 한 줄 요약)로 구성합니다.
-- 과장하지 않고, 확정적인 표현("무조건", "100%")은 쓰지 않습니다.
+- 12간지: 쥐, 소, 범, 토끼, 용, 뱀, 말, 양, 원숭이, 닭, 개, 돼지 (이
+  순서 그대로 12개 전부 빠짐없이 작성)
+- 각 띠마다 정확히 4줄, 각 줄은 20자 이내의 실질적인 조언/기운 설명
+- 확정적 표현("무조건", "100%")은 쓰지 않고, 불안을 조장하는 표현도
+  자제합니다.
 
-반드시 아래 JSON 배열 형식으로만 답하세요. 다른 설명은 쓰지 마세요.
-[{{"label": "...", "blurb": "..."}}]
+반드시 아래 JSON 형식으로만 답하세요. 다른 설명은 쓰지 마세요.
+{{"쥐": ["...", "...", "...", "..."], "소": ["...", "...", "...", "..."]}}
 """
     response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
     log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
     try:
-        items = json.loads(raw)
+        data = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", raw, re.S)
-        items = json.loads(match.group(0)) if match else []
-    if not isinstance(items, list):
-        items = []
-    return items[:6]
+        match = re.search(r"\{.*\}", raw, re.S)
+        data = json.loads(match.group(0)) if match else {}
+    if not isinstance(data, dict):
+        data = {}
+
+    fallback = [
+        "오늘은 평온한 하루가 예상됩니다",
+        "무리하지 않는 선에서 진행하세요",
+        "작은 배려가 좋은 인연을 만듭니다",
+        "여유를 갖고 하루를 마무리해보세요",
+    ]
+    for animal in ZODIAC_ANIMALS:
+        lines = data.get(animal)
+        if not isinstance(lines, list) or not lines:
+            data[animal] = list(fallback)
+        else:
+            cleaned = [str(x).strip()[:22] for x in lines[:4] if str(x).strip()]
+            while len(cleaned) < 4:
+                cleaned.append(fallback[len(cleaned)])
+            data[animal] = cleaned
+    return data
 
 
-def generate_fortune_card_background():
-    """운세 카드용 배경 이미지를 만듭니다. 글자는 나중에 따로
-    합성하므로, AI에게는 절대 글자를 그리지 말라고 지시합니다
-    (AI가 긴 텍스트를 정확히 그리지 못하기 때문입니다)."""
+def generate_fortune_shared_background():
+    """카드 7장이 전부 같은 배경을 공유합니다(장마다 새로 안 만들어서
+    비용과 시간을 아낍니다). 글자는 각 장마다 따로 합성합니다."""
     prompt = """
-Create a decorative, calming background illustration for a daily
-fortune / horoscope social media card. Soft mystical theme: stars,
-moon phases, soft gradient clouds, gentle zodiac-inspired motifs
-(no readable symbols). Warm deep-plum and gold color palette.
+Create a dark cosmic background illustration: deep navy-to-black night
+sky with subtle stars, soft nebula clouds, a few faint shooting stars.
+Elegant and mysterious mood for a Korean daily fortune / saju social
+media card series.
 
 ZERO-TEXT RULE:
-- No text, letters, numbers, words, or symbols that resemble writing.
-- Leave the top 30 percent and a wide margin on all sides visually
-  calm and uncluttered, since text will be added on top afterward.
-- Square 1:1 composition.
+- No text, letters, numbers, or symbols that resemble writing.
+- Keep the texture fairly even across the whole image (not too busy
+  in any one spot), since large text panels will be added on top
+  afterward in different places on different copies of this image.
+- Portrait 2:3 composition.
 """
     result = openai_client().images.generate(
-        model=IMAGE_MODEL,
-        prompt=prompt,
-        size="1024x1024",
-        quality="medium",
+        model=IMAGE_MODEL, prompt=prompt, size="1024x1536", quality="medium"
     )
     log_ai_usage("image")
     image_b64 = result.data[0].b64_json
     if not image_b64:
         raise RuntimeError("운세 카드 배경 이미지 생성에 실패했습니다.")
-    return image_b64
+    return Image.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGB")
 
 
-def compose_fortune_card(article, items, background_b64):
-    image = Image.open(io.BytesIO(base64.b64decode(background_b64))).convert("RGB")
-    width, height = image.size
+def _centered_text(draw, text, font, y, width, fill):
+    bbox = draw.textbbox((0, 0), text, font=font)
+    x = (width - (bbox[2] - bbox[0])) // 2
+    draw.text((x, y), text, font=font, fill=fill)
+
+
+def compose_fortune_cover(background, article, today, article_id):
+    image = background.copy()
     draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
 
-    margin = max(30, width // 24)
-    title_font = get_korean_font(56, bold=True)
-    label_font = get_korean_font(38, bold=True)
-    blurb_font = get_korean_font(32, bold=False)
+    cx, cy = width // 2, int(height * 0.42)
+    r = int(width * 0.40)
+    diamond = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy), (cx, cy - r)]
+    draw.line(diamond, fill=(255, 170, 220, 235), width=6)
+    r2 = r - 20
+    diamond2 = [(cx, cy - r2), (cx + r2, cy), (cx, cy + r2), (cx - r2, cy), (cx, cy - r2)]
+    draw.line(diamond2, fill=(255, 170, 220, 130), width=2)
 
-    # 아래쪽 절반 정도를 반투명 패널로 깔아서 글씨가 잘 읽히게 합니다.
-    panel_top = int(height * 0.32)
-    draw.rectangle((0, panel_top, width, height), fill=(28, 22, 44, 200))
+    date_font = get_korean_font(38, bold=True)
+    title_font = get_korean_font(66, bold=True)
+    sub_font = get_korean_font(30, bold=True)
 
-    title_text = article.thumbnail_text or article.title
-    title_lines = wrap_text_pixels(draw, title_text, title_font, width - margin * 2)[:2]
-    y = margin
-    for line in title_lines:
-        draw.text((margin, y), line, font=title_font, fill=(255, 255, 255, 255))
-        y += 66
+    _centered_text(draw, today.strftime("%m월 %d일"), date_font, cy - 150, width, (255, 205, 130, 255))
+    _centered_text(draw, "오늘의 운세", title_font, cy - 80, width, (255, 255, 255, 255))
+    _centered_text(draw, "十二支", sub_font, cy + 6, width, (255, 205, 130, 200))
 
-    y = panel_top + 26
-    for item in items:
-        if y > height - 60:
-            break
-        label = str(item.get("label", "")).strip()[:12]
-        blurb = str(item.get("blurb", "")).strip()[:24]
-        if label:
-            draw.text((margin, y), f"✦ {label}", font=label_font, fill=(230, 190, 140, 255))
-            y += 48
-        for wline in wrap_text_pixels(draw, blurb, blurb_font, width - margin * 2 - 24)[:2]:
-            draw.text((margin + 22, y), wline, font=blurb_font, fill=(255, 255, 255, 235))
-            y += 42
-        y += 16
+    icon_size = int(r * 0.9)
+    today_animal = ZODIAC_ANIMALS[(today.year - 1900) % 12]
+    try:
+        icon = Image.open(MEDIA_DIR / get_zodiac_icon(today_animal)).convert("RGBA")
+        icon = icon.resize((icon_size, icon_size))
+        image.paste(icon, (cx - icon_size // 2, cy + 60), icon)
+    except Exception:
+        pass
 
-    filename = f"fortune_card_{article.id}_{int(datetime.utcnow().timestamp())}.png"
+    footer_font = get_korean_font(26, bold=True)
+    _centered_text(draw, "매일 아침 새로운 하루를 위한 오늘의 운세", footer_font, height - 90, width, (255, 255, 255, 210))
+
+    filename = f"fortune_cover_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
     return filename
 
 
-def generate_fortune_card(article):
-    items = generate_fortune_card_items(article)
-    background_b64 = generate_fortune_card_background()
-    return compose_fortune_card(article, items, background_b64)
+def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+    margin = 40
+
+    title_font = get_korean_font(42, bold=True)
+    _centered_text(draw, f"{today.strftime('%m월 %d일')} 오늘의 띠별 운세", title_font, 44, width, (255, 220, 150, 255))
+
+    box_top = 130
+    box_gap = 26
+    box_height = (height - box_top - margin - box_gap * 2) // 3
+
+    for i, animal in enumerate(animals_subset):
+        color = ZODIAC_BOX_COLORS[i % len(ZODIAC_BOX_COLORS)]
+        box_y = box_top + i * (box_height + box_gap)
+        draw.rounded_rectangle(
+            (margin, box_y, width - margin, box_y + box_height),
+            radius=26, outline=color + (255,), width=4, fill=(12, 10, 22, 165),
+        )
+
+        icon_size = box_height - 34
+        try:
+            icon = Image.open(MEDIA_DIR / get_zodiac_icon(animal)).convert("RGBA").resize((icon_size, icon_size))
+            mask = Image.new("L", (icon_size, icon_size), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, icon_size, icon_size), fill=255)
+            image.paste(icon, (margin + 17, box_y + 17), mask)
+            draw.ellipse(
+                (margin + 17, box_y + 17, margin + 17 + icon_size, box_y + 17 + icon_size),
+                outline=color + (255,), width=3,
+            )
+        except Exception:
+            pass
+
+        label_font = get_korean_font(28, bold=True)
+        label_text = f"{animal}띠"
+        bbox = draw.textbbox((0, 0), label_text, font=label_font)
+        draw.text(
+            (margin + 17 + (icon_size - (bbox[2] - bbox[0])) // 2, box_y + icon_size + 22),
+            label_text, font=label_font, fill=(255, 255, 255, 255),
+        )
+
+        years = zodiac_birth_years(animal, reference_year=today.year)
+        lines = texts.get(animal, [])
+        year_font = get_korean_font(20, bold=True)
+        line_font = get_korean_font(23, bold=False)
+        text_x = margin + 17 + icon_size + 24
+        text_w = width - margin - text_x - 20
+        row_h = (box_height - 24) // 4
+        text_y = box_y + 14
+        for row in range(4):
+            year_label = str(years[row]) if row < len(years) else ""
+            draw.text((text_x, text_y + 4), year_label, font=year_font, fill=color + (255,))
+            line_text = lines[row] if row < len(lines) else ""
+            wrapped = wrap_text_pixels(draw, line_text, line_font, text_w - 74)[:1]
+            for wline in wrapped:
+                draw.text((text_x + 74, text_y), wline, font=line_font, fill=(255, 255, 255, 235))
+            text_y += row_h
+
+    filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def compose_fortune_closing(background, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+
+    title_font = get_korean_font(52, bold=True)
+    body_font = get_korean_font(28, bold=False)
+
+    y = height // 2 - 130
+    for line in ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]:
+        _centered_text(draw, line, title_font, y, width, (255, 222, 150, 255))
+        y += 74
+
+    _centered_text(draw, "오늘 나의 다짐을 댓글로 남겨보세요", body_font, y + 40, width, (255, 255, 255, 220))
+
+    filename = f"fortune_closing_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def compose_fortune_promo(background, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+
+    title_font = get_korean_font(44, bold=True)
+    price_font = get_korean_font(58, bold=True)
+    body_font = get_korean_font(26, bold=False)
+
+    y = 180
+    for line in ["나만의 자세한 운세가", "궁금하다면?"]:
+        _centered_text(draw, line, title_font, y, width, (255, 255, 255, 255))
+        y += 62
+
+    _centered_text(draw, "3,000원", price_font, y + 50, width, (255, 205, 130, 255))
+    _centered_text(draw, "프로필 링크에서 생년월일 넣고 확인하세요", body_font, y + 150, width, (255, 255, 255, 225))
+
+    filename = f"fortune_promo_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def generate_fortune_carousel(article):
+    """참고하신 계정처럼, 표지+띠별 운세 4장+마무리+홍보 카드까지
+    총 7장짜리 카드뉴스 세트를 만듭니다."""
+    today = datetime.utcnow().date()
+    background = generate_fortune_shared_background()
+    texts = generate_zodiac_fortune_texts(article)
+
+    filenames = [compose_fortune_cover(background, article, today, article.id)]
+    for i in range(4):
+        subset = ZODIAC_ANIMALS[i * 3:(i + 1) * 3]
+        filenames.append(compose_zodiac_slide(background, today, subset, texts, i + 1, article.id))
+    filenames.append(compose_fortune_closing(background, article.id))
+    filenames.append(compose_fortune_promo(background, article.id))
+    return filenames
 
 
 
@@ -3461,6 +3645,7 @@ th{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;le
         <div class="menu-section">
           <div class="menu-title">콘텐츠 제작</div>
           <div class="menu-links">
+            <a href="/fortune-quick/">🔮 오늘의 운세</a>
             <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
             <a href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a>
             <a href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a>
@@ -3646,6 +3831,13 @@ def edit_article(article_id):
     instatoon_cuts = get_instatoon_cuts(article)
     instatoon_text = canonical_instatoon_text(article)
 
+    try:
+        fortune_cards = json.loads(article.fortune_card_paths or "[]")
+        if not isinstance(fortune_cards, list):
+            fortune_cards = []
+    except json.JSONDecodeError:
+        fortune_cards = []
+
     return page_file(
         "edit_article.html",
         a=article,
@@ -3654,6 +3846,7 @@ def edit_article(article_id):
         blogs=blogs,
         publish_logs=publish_logs,
         progress=progress,
+        fortune_cards=fortune_cards,
         instatoon_images=instatoon_images,
         instatoon_captioned_images=instatoon_captioned_images,
         instatoon_character_profile=instatoon_character_profile,
@@ -5070,15 +5263,25 @@ def generate_thumbnail_route(article_id):
 def generate_fortune_card_route(article_id):
     article = Article.query.get_or_404(article_id)
     try:
-        old_path = article.fortune_card_path
-        filename = generate_fortune_card(article)
-        article.fortune_card_path = filename
+        old_paths = []
+        if article.fortune_card_paths:
+            try:
+                old_paths = json.loads(article.fortune_card_paths)
+            except json.JSONDecodeError:
+                old_paths = []
+
+        filenames = generate_fortune_carousel(article)
+        article.fortune_card_paths = json.dumps(filenames, ensure_ascii=False)
+        article.fortune_card_path = filenames[0]  # 대표 이미지(호환용)
         db.session.commit()
-        if old_path and old_path != filename:
-            old_file = MEDIA_DIR / old_path
-            if old_file.exists():
-                old_file.unlink()
-        flash("운세 카드 이미지를 만들었어요. SNS 탭에서 바로 다운로드하실 수 있어요.")
+
+        for old_path in old_paths:
+            if old_path not in filenames:
+                old_file = MEDIA_DIR / old_path
+                if old_file.exists():
+                    old_file.unlink()
+
+        flash(f"운세 카드뉴스 {len(filenames)}장을 만들었어요. SNS 탭에서 다운로드하실 수 있어요.")
     except Exception as e:
         db.session.rollback()
         flash(f"운세 카드 생성 실패: {e}")
@@ -5372,6 +5575,61 @@ FORTUNE_DAILY_TOPICS = [
 ]
 
 
+def create_daily_fortune_article():
+    """오늘의 운세 글 + SNS 콘텐츠(캡션)까지 만들어서 저장합니다.
+    수동 버튼과 매일 아침 자동 크론 작업이 이 함수를 같이 씁니다."""
+    today = datetime.utcnow().date()
+    topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
+    keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
+
+    data = generate_article(
+        keyword=keyword,
+        brand_style="운세·라이프스타일",
+        article_type="정보형",
+        length="약 1,500자",
+        audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
+        notes=(
+            "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
+            "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 "
+            "조언처럼 들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' "
+            "같은 안내를 자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, "
+            "정확한 금액 등)는 만들어내지 않는다."
+        ),
+    )
+
+    tags = data.get("tags", [])
+    if isinstance(tags, list):
+        tags = ",".join(str(t).strip().lstrip("#") for t in tags if str(t).strip())
+
+    article = Article(
+        keyword=keyword,
+        title=data.get("title", keyword),
+        meta_description=data.get("meta_description", ""),
+        body_html=data.get("body_html", ""),
+        brand_style="운세·라이프스타일",
+        article_type="정보형",
+        audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
+        tags=tags,
+    )
+    db.session.add(article)
+    db.session.flush()
+
+    article.seo_score, report = analyze_seo(article)
+    article.seo_report = json.dumps(report, ensure_ascii=False)
+
+    social = generate_social_pack(article)
+    article.instagram_caption = social.get("instagram_caption", "")
+    article.threads_text = social.get("threads_text", "")
+    article.shorts_script = social.get("shorts_script", "")
+    article.youtube_title = social.get("youtube_title", "")
+    article.youtube_description = social.get("youtube_description", "")
+    article.youtube_tags = social.get("youtube_tags", "")
+    article.tiktok_caption = social.get("tiktok_caption", "")
+
+    db.session.commit()
+    return article, topic
+
+
 @app.route("/tasks/generate-daily-fortune", methods=["GET", "POST"])
 def generate_daily_fortune():
     expected = os.getenv("CRON_SECRET", "")
@@ -5379,60 +5637,122 @@ def generate_daily_fortune():
     if not expected or not secrets.compare_digest(expected, supplied):
         return {"ok": False, "error": "unauthorized"}, 401
 
-    today = datetime.utcnow().date()
-    topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
-    keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
-
     try:
-        data = generate_article(
-            keyword=keyword,
-            brand_style="운세·라이프스타일",
-            article_type="정보형",
-            length="약 1,500자",
-            audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
-            notes=(
-                "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
-                "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 "
-                "조언처럼 들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' "
-                "같은 안내를 자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, "
-                "정확한 금액 등)는 만들어내지 않는다."
-            ),
-        )
-
-        tags = data.get("tags", [])
-        if isinstance(tags, list):
-            tags = ",".join(str(t).strip().lstrip("#") for t in tags if str(t).strip())
-
-        article = Article(
-            keyword=keyword,
-            title=data.get("title", keyword),
-            meta_description=data.get("meta_description", ""),
-            body_html=data.get("body_html", ""),
-            brand_style="운세·라이프스타일",
-            article_type="정보형",
-            audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
-            tags=tags,
-        )
-        db.session.add(article)
-        db.session.flush()
-
-        article.seo_score, report = analyze_seo(article)
-        article.seo_report = json.dumps(report, ensure_ascii=False)
-
-        social = generate_social_pack(article)
-        article.instagram_caption = social.get("instagram_caption", "")
-        article.threads_text = social.get("threads_text", "")
-        article.shorts_script = social.get("shorts_script", "")
-        article.youtube_title = social.get("youtube_title", "")
-        article.youtube_description = social.get("youtube_description", "")
-        article.youtube_tags = social.get("youtube_tags", "")
-        article.tiktok_caption = social.get("tiktok_caption", "")
-
-        db.session.commit()
+        article, topic = create_daily_fortune_article()
         return {"ok": True, "article_id": article.id, "title": article.title, "topic": topic}
     except Exception as e:
         db.session.rollback()
         return {"ok": False, "error": str(e)}, 500
+
+
+@app.get("/fortune-quick/")
+def fortune_quick_page():
+    recent = (
+        Article.query.filter_by(brand_style="운세·라이프스타일")
+        .order_by(Article.created_at.desc())
+        .limit(8)
+        .all()
+    )
+    icons_ready = all((MEDIA_DIR / f"zodiac_icon_{a}.png").exists() for a in ZODIAC_ANIMALS)
+    return page("""
+<section class="card">
+  <h1>🔮 오늘의 운세 한 번에 만들기</h1>
+  <p class="lead">
+    버튼 하나로 오늘의 운세 글, 운세 카드뉴스 7장, 인스타·Threads·
+    유튜브·틱톡용 캡션까지 전부 자동으로 만들어요. 시간이 걸리는
+    작업이라 3단계로 나눠서 진행해요 — 이 화면에서 진행 상황이
+    보여요. 완료되면 자동으로 결과 화면으로 이동해요.
+  </p>
+  <div class="notice" id="fortune_quick_status">
+    {% if icons_ready %}
+      준비 완료! 버튼을 누르면 보통 40초~1분 정도 걸려요.
+    {% else %}
+      처음 실행하는 거면 띠 아이콘 12개를 새로 만드느라 좀 더 걸려요
+      (1~2분). 한 번 만들어두면 다음부터는 훨씬 빨라져요.
+    {% endif %}
+  </div>
+  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 오늘의 운세 콘텐츠 만들기</button>
+</section>
+
+<section class="card">
+  <h2>최근에 만든 운세 콘텐츠</h2>
+  {% if recent %}
+    {% for article in recent %}
+    <div class="calendar-item">
+      <strong>{{ article.title }}</strong>
+      <div class="small">{{ article.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      <a class="btn gray" style="margin-top:8px" href="{{ url_for('edit_article', article_id=article.id) }}">열어서 공유하기</a>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="small">아직 만든 운세 콘텐츠가 없어요.</p>
+  {% endif %}
+</section>
+
+<script>
+async function runFortuneQuick(){
+  const btn = document.getElementById('fortune_quick_btn');
+  const status = document.getElementById('fortune_quick_status');
+  btn.disabled = true;
+  try {
+    status.textContent = '1/3 띠 아이콘 준비 중...';
+    const r1 = await fetch("{{ url_for('fortune_quick_step_icons') }}", {method:'POST'});
+    const d1 = await r1.json();
+    if(!d1.ok) throw new Error(d1.error || '아이콘 준비 실패');
+
+    status.textContent = '2/3 글과 캡션 만드는 중...';
+    const r2 = await fetch("{{ url_for('fortune_quick_step_article') }}", {method:'POST'});
+    const d2 = await r2.json();
+    if(!d2.ok) throw new Error(d2.error || '글 생성 실패');
+
+    status.textContent = '3/3 운세 카드 이미지 7장 만드는 중...';
+    const r3 = await fetch(`/fortune-quick/${d2.article_id}/step-images`, {method:'POST'});
+    const d3 = await r3.json();
+    if(!d3.ok) throw new Error(d3.error || '이미지 생성 실패');
+
+    status.textContent = '완료! 결과 화면으로 이동해요...';
+    window.location.href = `/articles/${d2.article_id}#sns`;
+  } catch(err) {
+    status.textContent = '실패했어요: ' + err.message;
+    btn.disabled = false;
+  }
+}
+</script>
+""", recent=recent, icons_ready=icons_ready, page_title="오늘의 운세 만들기 | MI Creator OS")
+
+
+@app.post("/fortune-quick/step-icons")
+def fortune_quick_step_icons():
+    try:
+        for animal in ZODIAC_ANIMALS:
+            get_zodiac_icon(animal)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.post("/fortune-quick/step-article")
+def fortune_quick_step_article():
+    try:
+        article, topic = create_daily_fortune_article()
+        return jsonify({"ok": True, "article_id": article.id, "topic": topic})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.post("/fortune-quick/<int:article_id>/step-images")
+def fortune_quick_step_images(article_id):
+    article = Article.query.get_or_404(article_id)
+    try:
+        filenames = generate_fortune_carousel(article)
+        article.fortune_card_paths = json.dumps(filenames, ensure_ascii=False)
+        article.fortune_card_path = filenames[0]
+        db.session.commit()
+        return jsonify({"ok": True, "count": len(filenames)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 

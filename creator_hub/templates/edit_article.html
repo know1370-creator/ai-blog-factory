@@ -233,13 +233,19 @@ html{scroll-behavior:smooth}
   <div class="card" style="background:var(--paper);margin-top:16px">
     <h3 style="margin-top:0">🖼️ 게시용 이미지</h3>
     <p class="small">
-      아래 이미지가 인스타·Threads·유튜브·틱톡 카드에 공통으로 쓰여요.
-      띠별·별자리 운세처럼 내용을 카드에 보여주고 싶으면 "운세 카드
-      이미지 만들기"를 눌러 주세요 (일반 썸네일 사진 대신, 글 내용
-      요약이 적힌 카드 이미지가 만들어져요).
+      "운세 카드 이미지 만들기"를 누르면 표지·띠별 운세 4장·마무리·
+      홍보까지 총 7장짜리 카드뉴스가 만들어져요. 인스타그램에 여러
+      장 한번에 올리는 캐러셀 게시물로 쓰시면 돼요.
     </p>
-    {% if a.fortune_card_path %}
-      <img src="{{ url_for('media', filename=a.fortune_card_path) }}" alt="운세 카드 이미지" style="width:100%;max-width:420px;border-radius:14px;margin-bottom:10px">
+    {% if fortune_cards %}
+      <div style="display:flex;gap:10px;overflow-x:auto;padding:6px 0 12px">
+        {% for card_path in fortune_cards %}
+          <div style="flex:0 0 auto;text-align:center">
+            <img src="{{ url_for('media', filename=card_path) }}" alt="운세 카드 {{ loop.index }}" style="height:280px;border-radius:12px;display:block;margin-bottom:6px">
+            <a class="btn gray" href="{{ url_for('media', filename=card_path) }}" download style="text-decoration:none;font-size:12px;padding:7px 10px">⬇️ {{ loop.index }}장</a>
+          </div>
+        {% endfor %}
+      </div>
     {% elif a.thumbnail_path %}
       <img src="{{ url_for('media', filename=a.thumbnail_path) }}" alt="썸네일 이미지" style="width:100%;max-width:420px;border-radius:14px;margin-bottom:10px">
       <p class="small">지금은 일반 썸네일이 대신 쓰이고 있어요.</p>
@@ -247,11 +253,8 @@ html{scroll-behavior:smooth}
       <p class="small">아직 이미지가 없어요.</p>
     {% endif %}
     <div class="actions" style="margin-top:0">
-      {% if a.fortune_card_path or a.thumbnail_path %}
-        <a class="btn gray" href="{{ url_for('media', filename=a.fortune_card_path or a.thumbnail_path) }}" download style="text-decoration:none">⬇️ 이미지 다운로드</a>
-      {% endif %}
       <form method="post" action="{{ url_for('generate_fortune_card_route', article_id=a.id) }}">
-        <button class="btn" type="submit">🔮 운세 카드 이미지 {{ '다시 만들기' if a.fortune_card_path else '만들기' }}</button>
+        <button class="btn" type="submit">🔮 운세 카드뉴스(7장) {{ '다시 만들기' if fortune_cards else '만들기' }}</button>
       </form>
     </div>
   </div>
@@ -274,7 +277,7 @@ html{scroll-behavior:smooth}
           class="btn green"
           type="button"
           style="margin-top:8px;width:100%"
-          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('instagram_text').value, 'instagram_share_status')"
+          onclick="shareToApp('{{ url_for('media', filename=(fortune_cards[0] if fortune_cards else a.thumbnail_path)) if (fortune_cards or a.thumbnail_path) else '' }}', document.getElementById('instagram_text').value, 'instagram_share_status')"
         >
           📤 이미지+캡션 공유하기 (인스타그램 앱으로)
         </button>
@@ -304,7 +307,7 @@ html{scroll-behavior:smooth}
           class="btn green"
           type="button"
           style="margin-top:8px;width:100%"
-          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('threads_text').value, 'threads_share_status')"
+          onclick="shareToApp('{{ url_for('media', filename=(fortune_cards[0] if fortune_cards else a.thumbnail_path)) if (fortune_cards or a.thumbnail_path) else '' }}', document.getElementById('threads_text').value, 'threads_share_status')"
         >
           📤 이미지+캡션 공유하기
         </button>
@@ -350,7 +353,7 @@ html{scroll-behavior:smooth}
           class="btn green"
           type="button"
           style="margin-top:8px;width:100%"
-          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('youtube_desc_text').value, 'youtube_share_status')"
+          onclick="shareToApp('{{ url_for('media', filename=(fortune_cards[0] if fortune_cards else a.thumbnail_path)) if (fortune_cards or a.thumbnail_path) else '' }}', document.getElementById('youtube_desc_text').value, 'youtube_share_status')"
         >
           📤 이미지+설명 공유하기
         </button>
@@ -377,7 +380,7 @@ html{scroll-behavior:smooth}
           class="btn green"
           type="button"
           style="margin-top:8px;width:100%"
-          onclick="shareToApp('{{ url_for('media', filename=(a.fortune_card_path or a.thumbnail_path)) if (a.fortune_card_path or a.thumbnail_path) else '' }}', document.getElementById('tiktok_text').value, 'tiktok_share_status')"
+          onclick="shareToApp('{{ url_for('media', filename=(fortune_cards[0] if fortune_cards else a.thumbnail_path)) if (fortune_cards or a.thumbnail_path) else '' }}', document.getElementById('tiktok_text').value, 'tiktok_share_status')"
         >
           📤 이미지+캡션 공유하기
         </button>
