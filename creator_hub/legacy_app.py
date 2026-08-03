@@ -5136,6 +5136,19 @@ def publish_instagram_route(article_id):
         )
         return redirect(url_for("edit_article", article_id=article.id))
 
+    # 인스타그램이 큰 PNG 파일을 못 가져가는 경우가 종종 있어서, 보내기
+    # 직전에 용량 작은 JPG로 한 번 변환합니다(원본 파일은 그대로 둡니다).
+    try:
+        with Image.open(MEDIA_DIR / image_filename) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            jpg_filename = f"instagram_ready_{article.id}.jpg"
+            img.save(MEDIA_DIR / jpg_filename, "JPEG", quality=85, optimize=True)
+        image_filename = jpg_filename
+    except Exception as e:
+        flash(f"이미지 변환 실패: {e}")
+        return redirect(url_for("edit_article", article_id=article.id))
+
     image_url = url_for("media", filename=image_filename, _external=True)
 
     try:
