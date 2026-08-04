@@ -884,13 +884,26 @@ def generate_fortune_reel_video(article, filenames):
             [
                 ffmpeg_exe, "-y",
                 "-f", "concat", "-safe", "0", "-i", str(list_path),
-                "-vsync", "vfr",
+                # 인스타그램 릴스는 오디오 트랙이 아예 없는 영상을 업로드
+                # 처리하는 중 멈추거나 실패하는 경우가 많아서, 무음
+                # 오디오 트랙을 하나 만들어 붙여줍니다.
+                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+                # 가변 프레임레이트(vfr) 대신 고정 프레임레이트(25fps)로
+                # 강제합니다. 인스타그램은 고정 프레임레이트를 기대하는데,
+                # 가변 프레임레이트 영상은 업로드 처리 중 멈추는 경우가
+                # 흔합니다.
+                "-r", "25",
                 "-pix_fmt", "yuv420p",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+                "-c:a", "aac", "-b:a", "128k",
+                "-shortest",
+                # moov atom(재생 정보)을 파일 맨 앞으로 옮겨서, 스트리밍
+                # 재생뿐 아니라 업로드 처리 과정에서도 안전하게 만듭니다.
+                "-movflags", "+faststart",
                 "-threads", "1",
                 str(output_path),
             ],
-            check=True, capture_output=True, timeout=60,
+            check=True, capture_output=True, timeout=90,
         )
 
     return output_filename
