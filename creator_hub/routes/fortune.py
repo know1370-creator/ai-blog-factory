@@ -364,29 +364,50 @@ def payment_page(order_id):
 <script src="https://js.tosspayments.com/v2/standard"></script>
 <script>
 const clientKey = "{{ client_key }}";
-const tossPayments = TossPayments(clientKey);
 const customerKey = "{{ order.order_id }}";
-const widgets = tossPayments.widgets({ customerKey });
 
 (async () => {
-  await widgets.setAmount({ currency: "KRW", value: {{ order.amount }} });
-  await Promise.all([
-    widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: "DEFAULT" }),
-    widgets.renderAgreement({ selector: "#agreement", variantKey: "AGREEMENT" }),
-  ]);
+  try {
+    const tossPayments = TossPayments(clientKey);
+    const widgets = tossPayments.widgets({ customerKey });
 
-  document.getElementById("pay-button").addEventListener("click", async () => {
-    try {
-      await widgets.requestPayment({
-        orderId: "{{ order.order_id }}",
-        orderName: "{{ order.name }}님의 오늘의 운세",
-        successUrl: window.location.origin + "{{ url_for('fortune_v1.payment_success') }}",
-        failUrl: window.location.origin + "{{ url_for('fortune_v1.payment_fail') }}",
-      });
-    } catch (err) {
-      alert("결제 요청 중 문제가 발생했어요: " + (err.message || err));
+    await widgets.setAmount({ currency: "KRW", value: {{ order.amount }} });
+    await Promise.all([
+      widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: "DEFAULT" }),
+      widgets.renderAgreement({ selector: "#agreement", variantKey: "AGREEMENT" }),
+    ]);
+
+    document.getElementById("pay-button").addEventListener("click", async () => {
+      try {
+        await widgets.requestPayment({
+          orderId: "{{ order.order_id }}",
+          orderName: "{{ order.name }}님의 오늘의 운세",
+          successUrl: window.location.origin + "{{ url_for('fortune_v1.payment_success') }}",
+          failUrl: window.location.origin + "{{ url_for('fortune_v1.payment_fail') }}",
+        });
+      } catch (err) {
+        console.error("결제 요청 실패:", err);
+        alert("결제 요청 중 문제가 발생했어요: " + (err.message || err));
+      }
+    });
+  } catch (err) {
+    // 여기서 실패하면 이전에는 "가상계좌로 결제하기" 버튼에 클릭
+    // 이벤트가 아예 연결이 안 돼서, 눌러도 조용히 아무 일도 안
+    // 일어났습니다. 이제는 화면에 에러를 직접 보여줘서 원인을 바로
+    // 확인할 수 있게 합니다.
+    console.error("결제창 초기화 실패:", err);
+    const btn = document.getElementById("pay-button");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "결제창을 불러오지 못했어요";
     }
-  });
+    const notice = document.createElement("div");
+    notice.className = "notice";
+    notice.style.color = "#c23b3b";
+    notice.style.marginTop = "10px";
+    notice.textContent = "결제창 로딩 오류: " + (err && (err.message || String(err)));
+    document.getElementById("payment-method").after(notice);
+  }
 })();
 </script>
 """, order=order, client_key=TOSS_CLIENT_KEY)
