@@ -854,7 +854,12 @@ def generate_fortune_reel_video(article, filenames):
     import tempfile
     import imageio_ffmpeg
 
-    target_size = (640, 960)
+    # 인스타그램 릴스는 정확히 9:16 비율을 기대합니다. 예전에는
+    # 640x960(2:3 비율)이라 표준과 안 맞았는데, 이게 인스타그램이
+    # 영상을 재처리하는 과정에서 뒷부분을 이상하게 자르는 원인이 될 수
+    # 있어서 정확한 9:16 비율로 맞춥니다(화질은 그대로 유지하면서
+    # 픽셀 수는 오히려 비슷하거나 더 적어서 메모리 부담도 늘지 않아요).
+    target_size = (540, 960)
     seconds_per_image = 3.5
 
     with tempfile.TemporaryDirectory() as tmp_dir:
