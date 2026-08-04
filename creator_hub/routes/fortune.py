@@ -157,6 +157,26 @@ def fill_reading(order):
 @fortune_bp.get("/")
 def landing():
     return page("""
+<div class="card" id="inapp_browser_notice" style="display:none;background:#fff3cd;border:1px solid #ffe08a">
+  <p style="margin:0;font-weight:700;color:#7a5a00">
+    ⚠️ 인스타그램 안에서 열려있어요
+  </p>
+  <p style="margin:8px 0 0;font-size:14px;color:#7a5a00;line-height:1.6">
+    결제창이 인스타그램 앱 안에서는 정상적으로 안 열릴 수 있어요.
+    오른쪽 위 점 3개(⋮) 메뉴를 눌러 <b>"다른 브라우저에서 열기"</b>를
+    선택해 주세요.
+  </p>
+</div>
+<script>
+(function(){
+  var ua = navigator.userAgent || "";
+  var isInApp = /Instagram|FBAN|FBAV/i.test(ua);
+  if (isInApp) {
+    var el = document.getElementById('inapp_browser_notice');
+    if (el) el.style.display = 'block';
+  }
+})();
+</script>
 <div class="card">
   <h1>🔮 오늘의 나의 운세</h1>
   <p class="lead">생년월일을 입력하면 AI가 나만의 운세를 읽어드려요.</p>
@@ -233,7 +253,44 @@ def create_order():
     db.session.add(order)
     db.session.commit()
 
+    # 여기서 바로 결제창 화면을 그려버리면, 주소창은 계속
+    # "/fortune/order"(POST 전용 주소)로 남아있게 됩니다. 이 상태에서
+    # 손님이 새로고침하거나 이 주소를 다시 열면 "GET은 지원 안 함"
+    # 오류가 나요. 그래서 주문을 만든 뒤에는 새로고침해도 안전한 별도
+    # 주소(/fortune/pay/<주문번호>)로 넘겨줍니다.
+    return redirect(url_for("fortune_v1.payment_page", order_id=order.order_id))
+
+
+@fortune_bp.get("/pay/<order_id>")
+def payment_page(order_id):
+    order = FortuneOrder.query.filter_by(order_id=order_id).first()
+    if not order:
+        return page("""<div class="card"><h1>주문을 찾을 수 없어요</h1></div>""")
+
+    if order.status != "pending":
+        return redirect(url_for("fortune_v1.result", order_id=order.order_id))
+
     return page("""
+<div class="card" id="inapp_browser_notice" style="display:none;background:#fff3cd;border:1px solid #ffe08a">
+  <p style="margin:0;font-weight:700;color:#7a5a00">
+    ⚠️ 인스타그램 안에서 열려있어요
+  </p>
+  <p style="margin:8px 0 0;font-size:14px;color:#7a5a00;line-height:1.6">
+    결제창이 인스타그램 앱 안에서는 정상적으로 안 열릴 수 있어요.
+    오른쪽 위 점 3개(⋮) 메뉴를 눌러 <b>"다른 브라우저에서 열기"</b>를
+    선택한 뒤 다시 시도해 주세요.
+  </p>
+</div>
+<script>
+(function(){
+  var ua = navigator.userAgent || "";
+  var isInApp = /Instagram|FBAN|FBAV/i.test(ua);
+  if (isInApp) {
+    var el = document.getElementById('inapp_browser_notice');
+    if (el) el.style.display = 'block';
+  }
+})();
+</script>
 <div class="card">
   <h1>결제하기</h1>
   <p class="lead">{{ order.name }}님의 운세 · {{ "{:,}".format(order.amount) }}원</p>
