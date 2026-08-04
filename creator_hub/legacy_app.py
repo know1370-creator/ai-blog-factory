@@ -2691,14 +2691,23 @@ def make_voice_reels_video(
 
 def ffmpeg_binary():
     path = shutil.which("ffmpeg")
+    if path:
+        return path
 
-    if not path:
-        raise RuntimeError(
-            "FFmpeg가 설치되어 있지 않습니다. "
-            "터미널에서 sudo apt-get update && sudo apt-get install -y ffmpeg 를 실행하세요."
-        )
+    # Render 서버에는 시스템 ffmpeg가 기본으로 설치되어 있지 않을 수
+    # 있습니다(오늘 한글 폰트가 없었던 것과 같은 이유입니다). 그래서
+    # imageio-ffmpeg 패키지 안에 이미 들어있는 ffmpeg 실행 파일을
+    # 대신 사용합니다 - 이건 pip로 설치되기 때문에 항상 존재합니다.
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
 
-    return path
+    raise RuntimeError(
+        "FFmpeg를 찾을 수 없습니다. requirements.txt에 imageio-ffmpeg가 "
+        "포함되어 있는지 확인해 주세요."
+    )
 
 
 def safe_float(value, default, minimum, maximum):
