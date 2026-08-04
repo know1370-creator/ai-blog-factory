@@ -214,8 +214,11 @@ def landing():
 })();
 </script>
 <div class="card">
-  <h1>🔮 오늘의 나의 운세</h1>
-  <p class="lead">생년월일을 입력하면 AI가 나만의 운세를 읽어드려요.</p>
+  <h1>🔮 AI가 풀어주는 나만의 정통 사주</h1>
+  <p class="lead">생년월일시만 넣으면, 애정운·재물운·건강운까지 5분 안에 상세하게 풀어드려요.</p>
+  <p style="font-size:14px;color:var(--gold);font-weight:700;margin:-10px 0 14px">
+    ✨ 무료 오늘의 운세보다 훨씬 자세한, 나만을 위한 사주 풀이예요
+  </p>
   <div class="price">3,000원</div>
 
   <form method="post" action="{{ url_for('fortune_v1.create_order') }}">
@@ -236,7 +239,7 @@ def landing():
     </select>
 
     <div style="margin-top:20px">
-      <button class="btn" type="submit">3,000원 결제하고 운세 보기</button>
+      <button class="btn" type="submit">3,000원 결제하고 내 사주 확인하기</button>
     </div>
   </form>
 
