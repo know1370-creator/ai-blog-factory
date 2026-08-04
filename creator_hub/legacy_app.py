@@ -841,43 +841,59 @@ def generate_fortune_carousel(article):
 
 def generate_fortune_reel_video(article, filenames):
     """카드뉴스 이미지 7장을 순서대로 보여주는 슬라이드쇼 영상(mp4)을
-    만듭니다. 릴스로 바로 올릴 수 있는 형태입니다. imageio-ffmpeg는
-    ffmpeg 실행 파일을 패키지 안에 이미 내장하고 있어서, 서버(Render)에
-    ffmpeg가 따로 설치되어 있지 않아도 항상 작동합니다.
+    만듭니다. imageio-ffmpeg는 ffmpeg 실행 파일을 패키지 안에 이미
+    내장하고 있어서, 서버(Render)에 ffmpeg가 따로 설치되어 있지 않아도
+    항상 작동합니다.
 
-    Render 서버는 메모리가 넉넉하지 않아서, 원본 해상도(1024x1536)
-    그대로 영상을 만들면 서버가 다운될 수 있습니다. 그래서 화면에
-    보여주기에 충분한 크기로 줄이고, 프레임 수도 최소화합니다."""
-    import gc
-    import imageio
-    import numpy as np
+    Render 서버 메모리 한도가 512MB로 꽤 빠듯해서(실제로 이전 방식은
+    메모리 초과로 서버가 다운됐습니다), 파이썬이 프레임을 하나하나
+    만들어서 들고 있는 대신, ffmpeg한테 "이 사진들을 몇 초씩 순서대로
+    보여줘"라고 통째로 맡깁니다. 이러면 파이썬은 이미지 하나씩만
+    잠깐 다루고 바로 놓아주기 때문에 메모리를 훨씬 적게 씁니다."""
+    import subprocess
+    import tempfile
+    import imageio_ffmpeg
 
-    # 원본(1024x1536)의 절반 크기로 줄입니다. 릴스 화면에서 보기엔
-    # 충분한 해상도이고, 메모리 사용량은 1/4로 줄어듭니다.
-    target_size = (512, 768)
-    fps = 8
-    seconds_per_image = 2.2
-    frames_per_image = int(fps * seconds_per_image)
+    target_size = (640, 960)
+    seconds_per_image = 3.5
 
-    output_filename = f"fortune_reel_{article.id}_{int(datetime.utcnow().timestamp())}.mp4"
-    output_path = MEDIA_DIR / output_filename
-
-    writer = imageio.get_writer(
-        str(output_path), fps=fps, codec="libx264",
-        format="ffmpeg", quality=5, macro_block_size=None,
-        ffmpeg_params=["-preset", "veryfast"],
-    )
-    try:
-        for filename in filenames:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        resized_paths = []
+        for index, filename in enumerate(filenames):
             with Image.open(MEDIA_DIR / filename) as img:
                 small = img.convert("RGB").resize(target_size)
-                frame = np.array(small)
-            for _ in range(frames_per_image):
-                writer.append_data(frame)
-            del frame
-            gc.collect()
-    finally:
-        writer.close()
+                resized_path = tmp_path / f"frame_{index:02d}.png"
+                small.save(resized_path, "PNG")
+            resized_paths.append(resized_path)
+
+        # ffmpeg의 concat 방식은 마지막 파일을 한 번 더(길이 지정 없이)
+        # 적어줘야 마지막 장면이 온전히 보입니다(ffmpeg 자체 동작 방식).
+        list_path = tmp_path / "list.txt"
+        with open(list_path, "w") as f:
+            for p in resized_paths:
+                f.write(f"file '{p.name}'\n")
+                f.write(f"duration {seconds_per_image}\n")
+            f.write(f"file '{resized_paths[-1].name}'\n")
+
+        output_filename = f"fortune_reel_{article.id}_{int(datetime.utcnow().timestamp())}.mp4"
+        output_path = MEDIA_DIR / output_filename
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        subprocess.run(
+            [
+                ffmpeg_exe, "-y",
+                "-f", "concat", "-safe", "0", "-i", str(list_path),
+                "-vsync", "vfr",
+                "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+                "-threads", "1",
+                str(output_path),
+            ],
+            check=True, capture_output=True, timeout=60,
+        )
+
+    return output_filename
 
     return output_filename
 

@@ -121,6 +121,23 @@ html{scroll-behavior:smooth}
     <label>태그 <span class="small">쉼표로 구분</span></label>
     <input name="tags" value="{{ a.tags }}">
 
+    <div style="margin-top:24px">
+      <label style="margin-top:0">🖼️ 발행 시 글 맨 위에 들어갈 사진</label>
+      {% if a.thumbnail_path %}
+        <img src="{{ url_for('media', filename=a.thumbnail_path) }}" alt="대표 이미지" style="width:100%;max-width:420px;border-radius:14px;margin-top:8px;display:block">
+        <p class="small" style="margin-top:6px">
+          이 사진이 발행할 때 글 맨 위에 자동으로 들어가요. 바꾸고 싶으면
+          "SEO·썸네일" 탭에서 다시 만드세요.
+        </p>
+      {% else %}
+        <p class="small" style="margin-top:6px">
+          아직 대표 이미지가 없어요. 사진 없이 발행하셔도 되지만(구글
+          블로그는 사진이 필수는 아니에요), 있으면 훨씬 보기 좋아요.
+          "SEO·썸네일" 탭에서 만들어보세요.
+        </p>
+      {% endif %}
+    </div>
+
     <div class="article-preview-header" style="margin-top:24px">
       <div>
         <label style="margin-top:0">📝 블로그 글 미리보기</label>
@@ -2470,13 +2487,17 @@ async function shareToApp(imageUrl, caption, statusElId) {
     return;
   }
   try {
-    setStatus('이미지 준비 중...');
+    setStatus('파일 준비 중...');
     const response = await fetch(imageUrl);
     const blob = await response.blob();
-    const file = new File([blob], 'post.png', { type: blob.type || 'image/png' });
+
+    const isVideo = /\.(mp4|mov|webm)(\?|#|$)/i.test(imageUrl);
+    const filename = isVideo ? 'reel.mp4' : 'post.png';
+    const mimeType = blob.type || (isVideo ? 'video/mp4' : 'image/png');
+    const file = new File([blob], filename, { type: mimeType });
 
     if (navigator.canShare && !navigator.canShare({ files: [file] })) {
-      setStatus('이 브라우저에서는 이미지 공유가 안 돼요. 이미지를 다운로드하고 캡션을 복사해서 직접 올려주세요.');
+      setStatus('이 브라우저에서는 공유가 안 돼요. 다운로드하고 캡션을 복사해서 직접 올려주세요.');
       return;
     }
 
