@@ -826,8 +826,11 @@ def generate_fortune_carousel(article):
     """표지+띠별 운세 4장+마무리+홍보 카드까지 총 7장짜리 카드뉴스
     세트를 만듭니다. 배경은 흰색 고정이라 AI 이미지 호출 없이 빠르게
     만들어집니다."""
-    today = datetime.utcnow().date()
-    background = generate_fortune_shared_background()
+    # UTC 기준으로 날짜를 계산하면, 한국 시간 새벽 0시~9시 사이에는
+    # 아직 "어제"로 계산돼서 카드에 하루 전 날짜가 찍히는 문제가
+    # 있었습니다. 한국 시간(KST) 기준으로 오늘 날짜를 계산하도록
+    # 고칩니다.
+    today = datetime.now(KST).date()
     texts = generate_zodiac_fortune_texts(article)
 
     filenames = [compose_fortune_cover(background, article, today, article.id)]
@@ -865,11 +868,23 @@ def generate_fortune_reel_video(article, filenames):
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         resized_paths = []
+        target_w, target_h = target_size
         for index, filename in enumerate(filenames):
             with Image.open(MEDIA_DIR / filename) as img:
-                small = img.convert("RGB").resize(target_size)
+                img = img.convert("RGB")
+                src_w, src_h = img.size
+                # .resize(target_size)로 그냥 늘려버리면 원본 비율(2:3)이
+                # 영상 비율(9:16)이랑 안 맞아서 다이아몬드·글씨가 세로로
+                # 쭉 늘어나 보였습니다. 비율은 그대로 유지한 채 축소만
+                # 하고, 남는 위아래 공간은 카드와 같은 크림색 배경으로
+                # 채워서 안 찌그러지게 합니다.
+                scale = min(target_w / src_w, target_h / src_h)
+                new_w, new_h = int(src_w * scale), int(src_h * scale)
+                resized = img.resize((new_w, new_h))
+                canvas = Image.new("RGB", target_size, (255, 253, 248))
+                canvas.paste(resized, ((target_w - new_w) // 2, (target_h - new_h) // 2))
                 resized_path = tmp_path / f"frame_{index:02d}.png"
-                small.save(resized_path, "PNG")
+                canvas.save(resized_path, "PNG")
             resized_paths.append(resized_path)
 
         # ffmpeg의 concat 방식은 마지막 파일을 한 번 더(길이 지정 없이)
@@ -5905,7 +5920,7 @@ FORTUNE_DAILY_TOPICS = [
 def create_daily_fortune_article():
     """오늘의 운세 글 + SNS 콘텐츠(캡션)까지 만들어서 저장합니다.
     수동 버튼과 매일 아침 자동 크론 작업이 이 함수를 같이 씁니다."""
-    today = datetime.utcnow().date()
+    today = datetime.now(KST).date()
     topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
     keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
 
