@@ -5592,6 +5592,16 @@ def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
 
 
+@app.get("/media/<path:filename>/download")
+def media_download(filename):
+    """모바일 브라우저(특히 안드로이드 크롬)는 서버가
+    Content-Disposition: attachment를 명시적으로 안 보내주면 <a download>
+    속성을 무시하고 영상을 그냥 열려고 하다가 실패하는 경우가 많습니다.
+    그래서 재생용 media 라우트와는 별도로, 다운로드 전용 라우트에서
+    as_attachment=True로 명시적으로 "파일로 저장하기" 모드를 강제합니다."""
+    return send_from_directory(MEDIA_DIR, filename, as_attachment=True)
+
+
 @app.get("/google/connect")
 def google_connect():
     try:
