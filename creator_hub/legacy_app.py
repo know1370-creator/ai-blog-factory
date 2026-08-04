@@ -624,9 +624,9 @@ def compose_fortune_cover(background, article, today, article_id):
     diamond2 = [(cx, cy - r2), (cx + r2, cy), (cx, cy + r2), (cx - r2, cy), (cx, cy - r2)]
     draw.line(diamond2, fill=(184, 146, 90, 130), width=2)
 
-    date_font = get_korean_font(38, bold=True)
-    title_font = get_korean_font(66, bold=True)
-    sub_font = get_korean_font(30, bold=True)
+    date_font = get_korean_font(42, bold=True)
+    title_font = get_korean_font(70, bold=True)
+    sub_font = get_korean_font(34, bold=True)
 
     _centered_text(draw, today.strftime("%m월 %d일"), date_font, cy - 150, width, GOLD)
     _centered_text(draw, "오늘의 운세", title_font, cy - 80, width, INK)
@@ -641,7 +641,7 @@ def compose_fortune_cover(background, article, today, article_id):
     except Exception:
         pass
 
-    footer_font = get_korean_font(26, bold=True)
+    footer_font = get_korean_font(30, bold=True)
     _centered_text(draw, "매일 아침 새로운 하루를 위한 오늘의 운세", footer_font, height - 90, width, MUTED)
 
     filename = f"fortune_cover_{article_id}_{int(datetime.utcnow().timestamp())}.png"
@@ -655,7 +655,7 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
     width, height = image.size
     margin = 40
 
-    title_font = get_korean_font(42, bold=True)
+    title_font = get_korean_font(46, bold=True)
     _centered_text(draw, f"{today.strftime('%m월 %d일')} 오늘의 띠별 운세", title_font, 44, width, INK)
 
     box_top = 130
@@ -671,10 +671,10 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
         )
 
         icon_size = box_height - 150
-        label_font = get_korean_font(30, bold=True)
+        label_font = get_korean_font(34, bold=True)
         label_text = f"{animal}띠"
         label_gap = 12
-        icon_block_h = icon_size + label_gap + 38
+        icon_block_h = icon_size + label_gap + 42
         icon_block_y = box_y + (box_height - icon_block_h) // 2
 
         try:
@@ -697,8 +697,8 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
 
         years = zodiac_birth_years(animal, reference_year=today.year)
         lines = texts.get(animal, [])
-        year_font = get_korean_font(25, bold=True)
-        line_font = get_korean_font(25, bold=False)
+        year_font = get_korean_font(29, bold=True)
+        line_font = get_korean_font(29, bold=False)
         text_x = margin + 17 + icon_size + 16
         text_w = width - margin - text_x - 20
         row_h = box_height / 4
@@ -707,11 +707,11 @@ def compose_zodiac_slide(background, today, animals_subset, texts, slide_index, 
             year_label = str(years[row]) if row < len(years) else ""
             draw.text((text_x, row_top + 14), year_label, font=year_font, fill=color + (255,))
             line_text = lines[row] if row < len(lines) else ""
-            wrapped = wrap_text_by_words(draw, line_text, line_font, text_w - 72)
-            line_y = row_top + 12
+            wrapped = wrap_text_by_words(draw, line_text, line_font, text_w - 80)
+            line_y = row_top + 10
             for wline in wrapped:
-                draw.text((text_x + 72, line_y), wline, font=line_font, fill=INK)
-                line_y += 30
+                draw.text((text_x + 80, line_y), wline, font=line_font, fill=INK)
+                line_y += 34
 
     filename = f"fortune_slide{slide_index}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
@@ -723,8 +723,8 @@ def compose_fortune_closing(background, today, article_id):
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
 
-    title_font = get_korean_font(50, bold=True)
-    body_font = get_korean_font(28, bold=False)
+    title_font = get_korean_font(54, bold=True)
+    body_font = get_korean_font(32, bold=False)
 
     title_lines = ["날마다 새로운 마음으로,", "오늘 하루도 힘내봐요"]
     line_h = 68
@@ -765,10 +765,10 @@ def compose_fortune_promo(background, today, article_id):
     draw = ImageDraw.Draw(image, "RGBA")
     width, height = image.size
 
-    title_font = get_korean_font(44, bold=True)
-    price_font = get_korean_font(58, bold=True)
-    body_font = get_korean_font(26, bold=False)
-    url_font = get_korean_font(30, bold=True)
+    title_font = get_korean_font(48, bold=True)
+    price_font = get_korean_font(62, bold=True)
+    body_font = get_korean_font(30, bold=False)
+    url_font = get_korean_font(34, bold=True)
 
     fortune_url = os.getenv("FORTUNE_URL", "https://ai-blog-factory.onrender.com/fortune/")
     title_lines = ["나만의 자세한 운세가", "궁금하다면?"]
