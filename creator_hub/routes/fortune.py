@@ -161,19 +161,49 @@ def landing():
   <p style="margin:0;font-weight:700;color:#7a5a00">
     ⚠️ 인스타그램 안에서 열려있어요
   </p>
-  <p style="margin:8px 0 0;font-size:14px;color:#7a5a00;line-height:1.6">
+  <p style="margin:8px 0 12px;font-size:14px;color:#7a5a00;line-height:1.6">
     결제창이 인스타그램 앱 안에서는 정상적으로 안 열릴 수 있어요.
-    오른쪽 위 점 3개(⋮) 메뉴를 눌러 <b>"다른 브라우저에서 열기"</b>를
-    선택해 주세요.
+    아래 버튼을 눌러서 다른 브라우저로 열어보세요.
   </p>
+  <a id="open_external_btn" class="btn" style="text-decoration:none;display:block;text-align:center;background:#7a5a00" target="_blank" rel="noopener">
+    다른 브라우저에서 열기
+  </a>
+  <button id="copy_link_btn" class="btn gray" type="button" style="margin-top:8px;width:100%">
+    링크 복사하기 (자동으로 안 열리면 크롬에 붙여넣어 주세요)
+  </button>
 </div>
 <script>
 (function(){
   var ua = navigator.userAgent || "";
   var isInApp = /Instagram|FBAN|FBAV/i.test(ua);
-  if (isInApp) {
-    var el = document.getElementById('inapp_browser_notice');
-    if (el) el.style.display = 'block';
+  if (!isInApp) return;
+
+  var el = document.getElementById('inapp_browser_notice');
+  if (el) el.style.display = 'block';
+
+  var pageUrl = window.location.href;
+  var isAndroid = /Android/i.test(ua);
+  var openBtn = document.getElementById('open_external_btn');
+  if (openBtn) {
+    if (isAndroid) {
+      // 안드로이드는 intent 링크를 쓰면 크롬으로 바로 넘어가는 경우가
+      // 많아서 이 방식을 우선 시도합니다.
+      var cleanUrl = pageUrl.replace("https://", "").replace("http://", "");
+      openBtn.href = "intent://" + cleanUrl + "#Intent;scheme=https;package=com.android.chrome;end";
+    } else {
+      openBtn.href = pageUrl;
+    }
+  }
+
+  var copyBtn = document.getElementById('copy_link_btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function(){
+      navigator.clipboard.writeText(pageUrl).then(function(){
+        copyBtn.textContent = '복사 완료! 크롬 앱을 열어서 주소창에 붙여넣어 주세요';
+      }).catch(function(){
+        copyBtn.textContent = '복사 실패했어요. 주소를 직접 옮겨 적어주세요: ' + pageUrl;
+      });
+    });
   }
 })();
 </script>
@@ -275,19 +305,47 @@ def payment_page(order_id):
   <p style="margin:0;font-weight:700;color:#7a5a00">
     ⚠️ 인스타그램 안에서 열려있어요
   </p>
-  <p style="margin:8px 0 0;font-size:14px;color:#7a5a00;line-height:1.6">
+  <p style="margin:8px 0 12px;font-size:14px;color:#7a5a00;line-height:1.6">
     결제창이 인스타그램 앱 안에서는 정상적으로 안 열릴 수 있어요.
-    오른쪽 위 점 3개(⋮) 메뉴를 눌러 <b>"다른 브라우저에서 열기"</b>를
-    선택한 뒤 다시 시도해 주세요.
+    아래 버튼을 눌러서 다른 브라우저로 열어보세요.
   </p>
+  <a id="open_external_btn" class="btn" style="text-decoration:none;display:block;text-align:center;background:#7a5a00" target="_blank" rel="noopener">
+    다른 브라우저에서 열기
+  </a>
+  <button id="copy_link_btn" class="btn gray" type="button" style="margin-top:8px;width:100%">
+    링크 복사하기 (자동으로 안 열리면 크롬에 붙여넣어 주세요)
+  </button>
 </div>
 <script>
 (function(){
   var ua = navigator.userAgent || "";
   var isInApp = /Instagram|FBAN|FBAV/i.test(ua);
-  if (isInApp) {
-    var el = document.getElementById('inapp_browser_notice');
-    if (el) el.style.display = 'block';
+  if (!isInApp) return;
+
+  var el = document.getElementById('inapp_browser_notice');
+  if (el) el.style.display = 'block';
+
+  var pageUrl = window.location.href;
+  var isAndroid = /Android/i.test(ua);
+  var openBtn = document.getElementById('open_external_btn');
+  if (openBtn) {
+    if (isAndroid) {
+      var cleanUrl = pageUrl.replace("https://", "").replace("http://", "");
+      openBtn.href = "intent://" + cleanUrl + "#Intent;scheme=https;package=com.android.chrome;end";
+    } else {
+      openBtn.href = pageUrl;
+    }
+  }
+
+  var copyBtn = document.getElementById('copy_link_btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function(){
+      navigator.clipboard.writeText(pageUrl).then(function(){
+        copyBtn.textContent = '복사 완료! 크롬 앱을 열어서 주소창에 붙여넣어 주세요';
+      }).catch(function(){
+        copyBtn.textContent = '복사 실패했어요. 주소를 직접 옮겨 적어주세요: ' + pageUrl;
+      });
+    });
   }
 })();
 </script>
