@@ -372,12 +372,12 @@ def generate_article(keyword, brand_style, article_type, length, audience, notes
     log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
         if not match:
             raise RuntimeError("AI 응답을 JSON으로 읽지 못했습니다. 다시 생성해 주세요.")
-        data = json.loads(match.group(0))
+        data = json.loads(match.group(0), strict=False)
     return data
 
 
@@ -538,11 +538,21 @@ def generate_zodiac_fortune_texts(article):
     response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
     log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
+    # AI가 가끔 줄바꿈 같은 제어 문자를 이스케이프 없이 그대로 JSON
+    # 문자열 안에 넣어서 응답할 때가 있는데, 파이썬 json 모듈은
+    # 기본적으로 이걸 엄격하게 거부하고 에러를 냅니다(그래서
+    # "오늘의 운세 한 번에 만들기" 버튼이 이유 없이 실패했었어요).
+    # strict=False로 이런 제어 문자를 허용해서 먼저 시도합니다.
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
-        data = json.loads(match.group(0)) if match else {}
+        try:
+            data = json.loads(match.group(0), strict=False) if match else {}
+        except json.JSONDecodeError:
+            # 그래도 안 되면(문법 자체가 깨진 경우) 전체 요청을 실패시키는
+            # 대신, 아래 fallback 문장으로 채워서 계속 진행합니다.
+            data = {}
     if not isinstance(data, dict):
         data = {}
 
@@ -3319,7 +3329,7 @@ def generate_social_pack(article):
     raw = strip_code_fence(response.output_text)
 
     try:
-        return json.loads(raw)
+        return json.loads(raw, strict=False)
 
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
@@ -3329,7 +3339,7 @@ def generate_social_pack(article):
                 "SNS 콘텐츠 응답을 JSON으로 읽지 못했습니다."
             )
 
-        return json.loads(match.group(0))
+        return json.loads(match.group(0), strict=False)
 
 
 
