@@ -843,12 +843,20 @@ def generate_fortune_reel_video(article, filenames):
     """카드뉴스 이미지 7장을 순서대로 보여주는 슬라이드쇼 영상(mp4)을
     만듭니다. 릴스로 바로 올릴 수 있는 형태입니다. imageio-ffmpeg는
     ffmpeg 실행 파일을 패키지 안에 이미 내장하고 있어서, 서버(Render)에
-    ffmpeg가 따로 설치되어 있지 않아도 항상 작동합니다."""
+    ffmpeg가 따로 설치되어 있지 않아도 항상 작동합니다.
+
+    Render 서버는 메모리가 넉넉하지 않아서, 원본 해상도(1024x1536)
+    그대로 영상을 만들면 서버가 다운될 수 있습니다. 그래서 화면에
+    보여주기에 충분한 크기로 줄이고, 프레임 수도 최소화합니다."""
+    import gc
     import imageio
     import numpy as np
 
-    fps = 12
-    seconds_per_image = 2.5
+    # 원본(1024x1536)의 절반 크기로 줄입니다. 릴스 화면에서 보기엔
+    # 충분한 해상도이고, 메모리 사용량은 1/4로 줄어듭니다.
+    target_size = (512, 768)
+    fps = 8
+    seconds_per_image = 2.2
     frames_per_image = int(fps * seconds_per_image)
 
     output_filename = f"fortune_reel_{article.id}_{int(datetime.utcnow().timestamp())}.mp4"
@@ -856,14 +864,18 @@ def generate_fortune_reel_video(article, filenames):
 
     writer = imageio.get_writer(
         str(output_path), fps=fps, codec="libx264",
-        format="ffmpeg", quality=7, macro_block_size=None,
+        format="ffmpeg", quality=5, macro_block_size=None,
+        ffmpeg_params=["-preset", "veryfast"],
     )
     try:
         for filename in filenames:
-            img = Image.open(MEDIA_DIR / filename).convert("RGB")
-            frame = np.array(img)
+            with Image.open(MEDIA_DIR / filename) as img:
+                small = img.convert("RGB").resize(target_size)
+                frame = np.array(small)
             for _ in range(frames_per_image):
                 writer.append_data(frame)
+            del frame
+            gc.collect()
     finally:
         writer.close()
 
