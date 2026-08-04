@@ -20,8 +20,14 @@ fortune_bp = Blueprint("fortune_v1", __name__, url_prefix="/fortune")
 # 실제 결제를 받으려면 Render 환경변수에 본인의 클라이언트 키/시크릿 키를
 # TOSS_CLIENT_KEY, TOSS_SECRET_KEY 로 등록해 주세요 (토스페이먼츠 개발자센터
 # > API 키 메뉴에서 확인).
-TOSS_CLIENT_KEY = os.getenv("TOSS_CLIENT_KEY", "test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq")
-TOSS_SECRET_KEY = os.getenv("TOSS_SECRET_KEY", "test_sk_zXLkKEypNArWmo50nX3lmeaxYG5R")
+# 토스페이먼츠 "결제위젯" 연동 전용 공식 테스트 키입니다(문서에 공개된
+# 키). 예전에 있던 test_ck_.../test_sk_...는 "API 개별 연동"용 키라서
+# 위젯 SDK(tossPayments.widgets())랑 안 맞아 "결제창을 불러오지
+# 못했어요" 오류가 났었습니다. gck/gsk가 들어간 이 키가 위젯 전용
+# 키예요. 실제 결제를 받으려면 토스페이먼츠 가입 후 상점관리자에서
+# 발급받는 진짜 "결제위젯 연동" 키로 Render 환경변수를 바꿔주세요.
+TOSS_CLIENT_KEY = os.getenv("TOSS_CLIENT_KEY", "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm")
+TOSS_SECRET_KEY = os.getenv("TOSS_SECRET_KEY", "test_gsk_docs_OaPz8L5KdmQXkzRz3y47BMw6")
 FORTUNE_PRICE = 3000
 
 
