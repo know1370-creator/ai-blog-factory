@@ -6052,6 +6052,31 @@ function fortuneQuickSetStep(text){
   status.innerHTML = `<span class="spin">⏳</span> ${text} <b>(경과 ${elapsed}초, 멈춘 게 아니라 실제로 돌아가는 중이에요)</b>`;
 }
 
+async function safeFetchJson(url, options, stepLabel) {
+  const startedAt = Date.now();
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (networkErr) {
+    // fetch 자체가 실패(네트워크 끊김, 서버가 아예 연결을 끊어버림 등)
+    throw new Error(`[${stepLabel}] 네트워크 오류로 서버에 연결이 끊겼어요 (${Math.floor((Date.now()-startedAt)/1000)}초 경과): ${networkErr.message}`);
+  }
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (parseErr) {
+    // JSON이 아니라는 건 Flask 코드가 실행되기도 전에 Render 서버
+    // 자체가 먼저 끊어버렸다는 뜻입니다(대부분 처리 시간 초과). 어느
+    // 단계에서, 몇 초 만에, 어떤 상태코드로 끊겼는지 정확히 보여줘서
+    // 다음에 원인을 바로 찾을 수 있게 합니다.
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const preview = text.slice(0, 120).split(/[\r\n\t ]+/).join(' ');
+    throw new Error(`[${stepLabel}] 서버가 JSON 대신 다른 응답을 보냈어요 (상태코드 ${res.status}, ${elapsed}초 경과). 응답 미리보기: ${preview}`);
+  }
+  return data;
+}
+
 async function runFortuneQuick(){
   const btn = document.getElementById('fortune_quick_btn');
   btn.disabled = true;
@@ -6062,29 +6087,25 @@ async function runFortuneQuick(){
   try {
     window.__fortuneQuickCurrentStep = '1/3 띠 아이콘 목록 확인 중...';
     fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-    const r1 = await fetch("{{ url_for('fortune_quick_step_icons') }}", {method:'POST'});
-    const d1 = await r1.json();
+    const d1 = await safeFetchJson("{{ url_for('fortune_quick_step_icons') }}", {method:'POST'}, '1/3 아이콘 목록');
     if(!d1.ok) throw new Error(d1.error || '아이콘 준비 실패');
 
     for (let i = 0; i < d1.animals.length; i++) {
       const animal = d1.animals[i];
       window.__fortuneQuickCurrentStep = `1/3 띠 아이콘 준비 중... (${i+1}/${d1.animals.length}: ${animal}띠)`;
       fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-      const ri = await fetch(`/fortune-quick/step-icon/${encodeURIComponent(animal)}`, {method:'POST'});
-      const di = await ri.json();
+      const di = await safeFetchJson(`/fortune-quick/step-icon/${encodeURIComponent(animal)}`, {method:'POST'}, `1/3 ${animal}띠 아이콘`);
       if(!di.ok) throw new Error(di.error || `${animal}띠 아이콘 생성 실패`);
     }
 
     window.__fortuneQuickCurrentStep = '2/3 글과 캡션 만드는 중...';
     fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-    const r2 = await fetch("{{ url_for('fortune_quick_step_article') }}", {method:'POST'});
-    const d2 = await r2.json();
+    const d2 = await safeFetchJson("{{ url_for('fortune_quick_step_article') }}", {method:'POST'}, '2/3 글·캡션');
     if(!d2.ok) throw new Error(d2.error || '글 생성 실패');
 
     window.__fortuneQuickCurrentStep = '3/3 운세 카드 이미지 7장 만드는 중...';
     fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-    const r3 = await fetch(`/fortune-quick/${d2.article_id}/step-images`, {method:'POST'});
-    const d3 = await r3.json();
+    const d3 = await safeFetchJson(`/fortune-quick/${d2.article_id}/step-images`, {method:'POST'}, '3/3 카드 이미지');
     if(!d3.ok) throw new Error(d3.error || '이미지 생성 실패');
 
     clearInterval(fortuneQuickTimer);
