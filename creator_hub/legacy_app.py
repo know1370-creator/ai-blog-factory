@@ -841,6 +841,7 @@ def generate_fortune_carousel(article):
     # 있었습니다. 한국 시간(KST) 기준으로 오늘 날짜를 계산하도록
     # 고칩니다.
     today = datetime.now(KST).date()
+    background = generate_fortune_shared_background()
     texts = generate_zodiac_fortune_texts(article)
 
     filenames = [compose_fortune_cover(background, article, today, article.id)]
