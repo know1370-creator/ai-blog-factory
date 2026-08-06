@@ -6024,7 +6024,7 @@ def fortune_quick_page():
       (1~2분). 한 번 만들어두면 다음부터는 훨씬 빨라져요.
     {% endif %}
   </div>
-  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 오늘의 운세 콘텐츠 만들기</button>
+  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="try{runFortuneQuick()}catch(e){alert('클릭 처리 중 오류: ' + e.message)}">🔮 오늘의 운세 콘텐츠 만들기</button>
 </section>
 
 <section class="card">
@@ -6043,6 +6043,10 @@ def fortune_quick_page():
 </section>
 
 <script>
+window.addEventListener('error', function(e){
+  alert('페이지 스크립트 오류: ' + e.message + ' (파일: ' + e.filename + ', 줄: ' + e.lineno + ')');
+});
+
 let fortuneQuickTimer = null;
 let fortuneQuickStartedAt = null;
 
