@@ -372,12 +372,12 @@ def generate_article(keyword, brand_style, article_type, length, audience, notes
     log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
     try:
-        data = json.loads(raw, strict=False)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
         if not match:
             raise RuntimeError("AI 응답을 JSON으로 읽지 못했습니다. 다시 생성해 주세요.")
-        data = json.loads(match.group(0), strict=False)
+        data = json.loads(match.group(0))
     return data
 
 
@@ -538,21 +538,11 @@ def generate_zodiac_fortune_texts(article):
     response = openai_client().responses.create(model=OPENAI_MODEL, input=prompt)
     log_ai_usage("text")
     raw = strip_code_fence(response.output_text)
-    # AI가 가끔 줄바꿈 같은 제어 문자를 이스케이프 없이 그대로 JSON
-    # 문자열 안에 넣어서 응답할 때가 있는데, 파이썬 json 모듈은
-    # 기본적으로 이걸 엄격하게 거부하고 에러를 냅니다(그래서
-    # "오늘의 운세 한 번에 만들기" 버튼이 이유 없이 실패했었어요).
-    # strict=False로 이런 제어 문자를 허용해서 먼저 시도합니다.
     try:
-        data = json.loads(raw, strict=False)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
-        try:
-            data = json.loads(match.group(0), strict=False) if match else {}
-        except json.JSONDecodeError:
-            # 그래도 안 되면(문법 자체가 깨진 경우) 전체 요청을 실패시키는
-            # 대신, 아래 fallback 문장으로 채워서 계속 진행합니다.
-            data = {}
+        data = json.loads(match.group(0)) if match else {}
     if not isinstance(data, dict):
         data = {}
 
@@ -836,11 +826,7 @@ def generate_fortune_carousel(article):
     """표지+띠별 운세 4장+마무리+홍보 카드까지 총 7장짜리 카드뉴스
     세트를 만듭니다. 배경은 흰색 고정이라 AI 이미지 호출 없이 빠르게
     만들어집니다."""
-    # UTC 기준으로 날짜를 계산하면, 한국 시간 새벽 0시~9시 사이에는
-    # 아직 "어제"로 계산돼서 카드에 하루 전 날짜가 찍히는 문제가
-    # 있었습니다. 한국 시간(KST) 기준으로 오늘 날짜를 계산하도록
-    # 고칩니다.
-    today = datetime.now(KST).date()
+    today = datetime.utcnow().date()
     background = generate_fortune_shared_background()
     texts = generate_zodiac_fortune_texts(article)
 
@@ -868,34 +854,17 @@ def generate_fortune_reel_video(article, filenames):
     import tempfile
     import imageio_ffmpeg
 
-    # 인스타그램 릴스는 정확히 9:16 비율을 기대합니다. 예전에는
-    # 640x960(2:3 비율)이라 표준과 안 맞았는데, 이게 인스타그램이
-    # 영상을 재처리하는 과정에서 뒷부분을 이상하게 자르는 원인이 될 수
-    # 있어서 정확한 9:16 비율로 맞춥니다(화질은 그대로 유지하면서
-    # 픽셀 수는 오히려 비슷하거나 더 적어서 메모리 부담도 늘지 않아요).
-    target_size = (540, 960)
+    target_size = (640, 960)
     seconds_per_image = 3.5
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         resized_paths = []
-        target_w, target_h = target_size
         for index, filename in enumerate(filenames):
             with Image.open(MEDIA_DIR / filename) as img:
-                img = img.convert("RGB")
-                src_w, src_h = img.size
-                # .resize(target_size)로 그냥 늘려버리면 원본 비율(2:3)이
-                # 영상 비율(9:16)이랑 안 맞아서 다이아몬드·글씨가 세로로
-                # 쭉 늘어나 보였습니다. 비율은 그대로 유지한 채 축소만
-                # 하고, 남는 위아래 공간은 카드와 같은 크림색 배경으로
-                # 채워서 안 찌그러지게 합니다.
-                scale = min(target_w / src_w, target_h / src_h)
-                new_w, new_h = int(src_w * scale), int(src_h * scale)
-                resized = img.resize((new_w, new_h))
-                canvas = Image.new("RGB", target_size, (255, 253, 248))
-                canvas.paste(resized, ((target_w - new_w) // 2, (target_h - new_h) // 2))
+                small = img.convert("RGB").resize(target_size)
                 resized_path = tmp_path / f"frame_{index:02d}.png"
-                canvas.save(resized_path, "PNG")
+                small.save(resized_path, "PNG")
             resized_paths.append(resized_path)
 
         # ffmpeg의 concat 방식은 마지막 파일을 한 번 더(길이 지정 없이)
@@ -915,26 +884,13 @@ def generate_fortune_reel_video(article, filenames):
             [
                 ffmpeg_exe, "-y",
                 "-f", "concat", "-safe", "0", "-i", str(list_path),
-                # 인스타그램 릴스는 오디오 트랙이 아예 없는 영상을 업로드
-                # 처리하는 중 멈추거나 실패하는 경우가 많아서, 무음
-                # 오디오 트랙을 하나 만들어 붙여줍니다.
-                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-                # 가변 프레임레이트(vfr) 대신 고정 프레임레이트(25fps)로
-                # 강제합니다. 인스타그램은 고정 프레임레이트를 기대하는데,
-                # 가변 프레임레이트 영상은 업로드 처리 중 멈추는 경우가
-                # 흔합니다.
-                "-r", "25",
+                "-vsync", "vfr",
                 "-pix_fmt", "yuv420p",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
-                "-c:a", "aac", "-b:a", "128k",
-                "-shortest",
-                # moov atom(재생 정보)을 파일 맨 앞으로 옮겨서, 스트리밍
-                # 재생뿐 아니라 업로드 처리 과정에서도 안전하게 만듭니다.
-                "-movflags", "+faststart",
                 "-threads", "1",
                 str(output_path),
             ],
-            check=True, capture_output=True, timeout=90,
+            check=True, capture_output=True, timeout=60,
         )
 
     return output_filename
@@ -3330,7 +3286,7 @@ def generate_social_pack(article):
     raw = strip_code_fence(response.output_text)
 
     try:
-        return json.loads(raw, strict=False)
+        return json.loads(raw)
 
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.S)
@@ -3340,7 +3296,7 @@ def generate_social_pack(article):
                 "SNS 콘텐츠 응답을 JSON으로 읽지 못했습니다."
             )
 
-        return json.loads(match.group(0), strict=False)
+        return json.loads(match.group(0))
 
 
 
@@ -5636,16 +5592,6 @@ def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
 
 
-@app.get("/media/<path:filename>/download")
-def media_download(filename):
-    """모바일 브라우저(특히 안드로이드 크롬)는 서버가
-    Content-Disposition: attachment를 명시적으로 안 보내주면 <a download>
-    속성을 무시하고 영상을 그냥 열려고 하다가 실패하는 경우가 많습니다.
-    그래서 재생용 media 라우트와는 별도로, 다운로드 전용 라우트에서
-    as_attachment=True로 명시적으로 "파일로 저장하기" 모드를 강제합니다."""
-    return send_from_directory(MEDIA_DIR, filename, as_attachment=True)
-
-
 @app.get("/google/connect")
 def google_connect():
     try:
@@ -5931,7 +5877,7 @@ FORTUNE_DAILY_TOPICS = [
 def create_daily_fortune_article():
     """오늘의 운세 글 + SNS 콘텐츠(캡션)까지 만들어서 저장합니다.
     수동 버튼과 매일 아침 자동 크론 작업이 이 함수를 같이 씁니다."""
-    today = datetime.now(KST).date()
+    today = datetime.utcnow().date()
     topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
     keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
 
@@ -6024,7 +5970,7 @@ def fortune_quick_page():
       (1~2분). 한 번 만들어두면 다음부터는 훨씬 빨라져요.
     {% endif %}
   </div>
-  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="try{runFortuneQuick()}catch(e){alert('클릭 처리 중 오류: ' + e.message)}">🔮 오늘의 운세 콘텐츠 만들기</button>
+  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 오늘의 운세 콘텐츠 만들기</button>
 </section>
 
 <section class="card">
@@ -6075,7 +6021,7 @@ async function safeFetchJson(url, options, stepLabel) {
     // 단계에서, 몇 초 만에, 어떤 상태코드로 끊겼는지 정확히 보여줘서
     // 다음에 원인을 바로 찾을 수 있게 합니다.
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    const preview = text.slice(0, 120).split(/[\r\n\t ]+/).join(' ');
+    const preview = text.slice(0, 120).split(/[\n\t ]+/).join(' ');
     throw new Error(`[${stepLabel}] 서버가 JSON 대신 다른 응답을 보냈어요 (상태코드 ${res.status}, ${elapsed}초 경과). 응답 미리보기: ${preview}`);
   }
   return data;
