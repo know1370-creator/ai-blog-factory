@@ -6021,7 +6021,7 @@ async function safeFetchJson(url, options, stepLabel) {
     // 단계에서, 몇 초 만에, 어떤 상태코드로 끊겼는지 정확히 보여줘서
     // 다음에 원인을 바로 찾을 수 있게 합니다.
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    const preview = text.slice(0, 120).split(/[\n\t ]+/).join(' ');
+    const preview = text.slice(0, 120).split(/[\\n\\t ]+/).join(' ');
     throw new Error(`[${stepLabel}] 서버가 JSON 대신 다른 응답을 보냈어요 (상태코드 ${res.status}, ${elapsed}초 경과). 응답 미리보기: ${preview}`);
   }
   return data;
