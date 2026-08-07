@@ -854,7 +854,7 @@ def generate_fortune_reel_video(article, filenames):
     import tempfile
     import imageio_ffmpeg
 
-    target_size = (640, 960)
+    target_size = (720, 1280)
     seconds_per_image = 3.5
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -884,9 +884,12 @@ def generate_fortune_reel_video(article, filenames):
             [
                 ffmpeg_exe, "-y",
                 "-f", "concat", "-safe", "0", "-i", str(list_path),
-                "-vsync", "vfr",
+                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-vsync", "cfr", "-r", "24",
                 "-pix_fmt", "yuv420p",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+                "-c:a", "aac", "-shortest",
+                "-movflags", "+faststart",
                 "-threads", "1",
                 str(output_path),
             ],
