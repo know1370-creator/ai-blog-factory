@@ -5592,6 +5592,11 @@ def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
 
 
+@app.get("/media/<path:filename>/download")
+def media_download(filename):
+    return send_from_directory(MEDIA_DIR, filename, as_attachment=True)
+
+
 @app.get("/google/connect")
 def google_connect():
     try:
