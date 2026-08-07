@@ -5970,7 +5970,7 @@ def fortune_quick_page():
       (1~2분). 한 번 만들어두면 다음부터는 훨씬 빨라져요.
     {% endif %}
   </div>
-  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 오늘의 운세 콘텐츠 만들기</button>
+  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 테스트12345 운세 만들기</button>
 </section>
 
 <section class="card">
@@ -6065,7 +6065,7 @@ async function runFortuneQuick(){
     clearInterval(fortuneQuickTimer);
     document.getElementById('fortune_quick_status').textContent = '❌ 실패했어요: ' + err.message;
     btn.disabled = false;
-    btn.innerHTML = '🔮 오늘의 운세 콘텐츠 만들기';
+    btn.innerHTML = '🔮 테스트12345 운세 만들기';
   }
 }
 </script>
