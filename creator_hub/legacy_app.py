@@ -839,6 +839,186 @@ def generate_fortune_carousel(article):
     return filenames
 
 
+# ── TOP3 훅 릴스 전용 카드뉴스 (강렬한 빨강·블랙 쇼츠 스타일) ──────────
+# 사장님이 미리 써둔 "훅 / N위 OO띠 - 이유 / ... / CTA" 형식의 대본을
+# 붙여넣었을 때, 기존의 "12지신 전부 보여주는" 카드 대신 훅과 TOP N
+# 순위만 크게 보여주는 임팩트 있는 카드로 만듭니다.
+
+TOP3_RANK_COLORS = {1: (255, 205, 60), 2: (210, 210, 215), 3: (205, 140, 80)}
+TOP3_RANK_FALLBACK_COLOR = (226, 40, 40)
+
+
+def parse_top3_brief(text):
+    """'훅 문구 / 1위 OO띠 - 이유 / 2위 ... / CTA 문구' 형식(슬래시나
+    줄바꿈으로 구분)의 대본을 파싱합니다. 'N위 OO띠 - 이유' 패턴이
+    2개 이상 없으면(=TOP N 형식이 아니면) None을 돌려줘서, 호출하는
+    쪽이 기존 12지신 전체 카드 방식으로 자연스럽게 넘어가게 합니다."""
+    text = (text or "").strip()
+    if not text:
+        return None
+
+    segments = [s.strip() for s in re.split(r"/|\n", text) if s.strip()]
+    rank_pattern = re.compile(r"^(\d)\s*위\s*([가-힣]{1,3})\s*띠\s*[-–—:]\s*(.+)$")
+
+    items = []
+    before, after = [], []
+    for seg in segments:
+        match = rank_pattern.match(seg)
+        if match:
+            animal = match.group(2)
+            if animal in ZODIAC_ANIMALS:
+                items.append({
+                    "rank": int(match.group(1)),
+                    "animal": animal,
+                    "reason": match.group(3).strip(),
+                })
+                continue
+        (after if items else before).append(seg)
+
+    if len(items) < 2:
+        return None
+
+    items.sort(key=lambda x: x["rank"])
+    items = items[:5]
+    hook = before[0] if before else f"오늘 {items[0]['animal']}띠 등 TOP{len(items)} 확인하세요"
+    cta = after[-1] if after else "저장하고 다음 운세도 받아가세요"
+    return {"hook": hook, "items": items, "cta": cta}
+
+
+def generate_top3_fortune_shared_background():
+    """검정에서 진한 레드로 은은하게 퍼지는 배경(쇼츠에서 자주 보이는
+    강렬한 느낌). 카드마다 다시 그리지 않도록 한 번만 만들어 재사용."""
+    width, height = 1024, 1536
+    # 세로 1픽셀짜리 그라데이션만 계산한 뒤 가로로 늘려서 만듭니다
+    # (가로세로 전체를 픽셀 단위로 채우면 느려서, 계산량을 height번으로 줄입니다).
+    gradient = Image.new("RGB", (1, height))
+    for y in range(height):
+        t = (y / height) ** 2
+        r = int(12 + (70 - 12) * t)
+        g = int(10 + (8 - 10) * t)
+        b = int(14 - 4 * t)
+        gradient.putpixel((0, y), (r, g, b))
+    image = gradient.resize((width, height))
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.rectangle((22, 22, width - 22, height - 22), outline=(226, 40, 40, 220), width=4)
+    return image
+
+
+def compose_top3_cover(background, hook_text, rank_count, today, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+
+    badge_font = get_korean_font(40, bold=True)
+    hook_font = get_korean_font(62, bold=True)
+    date_font = get_korean_font(30, bold=True)
+
+    badge_text = f"TOP{rank_count}"
+    bbox = draw.textbbox((0, 0), badge_text, font=badge_font)
+    badge_pad_x, badge_pad_y = 34, 18
+    badge_w = (bbox[2] - bbox[0]) + badge_pad_x * 2
+    badge_h = (bbox[3] - bbox[1]) + badge_pad_y * 2
+    badge_x = (width - badge_w) // 2
+    badge_y = int(height * 0.16)
+    draw.rounded_rectangle(
+        (badge_x, badge_y, badge_x + badge_w, badge_y + badge_h),
+        radius=badge_h // 2, fill=(226, 40, 40, 255),
+    )
+    draw.text((badge_x + badge_pad_x, badge_y + badge_pad_y - 6), badge_text, font=badge_font, fill=(255, 255, 255, 255))
+
+    max_w = int(width * 0.82)
+    lines = wrap_text_by_words(draw, hook_text, hook_font, max_w)
+    y = badge_y + badge_h + 70
+    for line in lines:
+        _centered_text(draw, line, hook_font, y, width, (255, 255, 255, 255))
+        y += 82
+
+    _centered_text(draw, today.strftime("%m월 %d일 오늘의 운세"), date_font, height - 90, width, (226, 40, 40, 255))
+
+    filename = f"top3_cover_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def compose_top3_rank_card(background, rank, animal, reason, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+    color = TOP3_RANK_COLORS.get(rank, TOP3_RANK_FALLBACK_COLOR) + (255,)
+
+    rank_font = get_korean_font(90, bold=True)
+    label_font = get_korean_font(30, bold=True)
+    animal_font = get_korean_font(72, bold=True)
+    reason_font = get_korean_font(38, bold=True)
+
+    badge_r = 90
+    badge_cx, badge_cy = width // 2, int(height * 0.16)
+    draw.ellipse((badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r), fill=color)
+    rank_text = str(rank)
+    bbox = draw.textbbox((0, 0), rank_text, font=rank_font)
+    draw.text(
+        (badge_cx - (bbox[2] - bbox[0]) // 2, badge_cy - (bbox[3] - bbox[1]) // 2 - 10),
+        rank_text, font=rank_font, fill=(15, 15, 18, 255),
+    )
+    _centered_text(draw, "위", label_font, badge_cy + badge_r + 14, width, color)
+
+    icon_size = int(width * 0.42)
+    icon_y = badge_cy + badge_r + 70
+    try:
+        icon = Image.open(MEDIA_DIR / get_zodiac_icon(animal)).convert("RGBA").resize((icon_size, icon_size))
+        image.paste(icon, ((width - icon_size) // 2, icon_y), icon)
+    except Exception:
+        pass
+
+    name_y = icon_y + icon_size + 24
+    _centered_text(draw, f"{animal}띠", animal_font, name_y, width, (255, 255, 255, 255))
+
+    reason_y = name_y + 100
+    max_w = int(width * 0.82)
+    for line in wrap_text_by_words(draw, reason, reason_font, max_w)[:3]:
+        _centered_text(draw, line, reason_font, reason_y, width, color)
+        reason_y += 52
+
+    filename = f"top3_rank{rank}_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def compose_top3_cta(background, cta_text, article_id):
+    image = background.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+
+    cta_font = get_korean_font(56, bold=True)
+    sub_font = get_korean_font(30, bold=True)
+
+    max_w = int(width * 0.8)
+    lines = wrap_text_by_words(draw, cta_text, cta_font, max_w)
+    y = (height - len(lines) * 72) // 2 - 40
+    for line in lines:
+        _centered_text(draw, line, cta_font, y, width, (255, 255, 255, 255))
+        y += 72
+
+    _centered_text(draw, "매일 아침 확인하세요", sub_font, y + 30, width, (226, 40, 40, 255))
+
+    filename = f"top3_cta_{article_id}_{int(datetime.utcnow().timestamp())}.png"
+    image.save(MEDIA_DIR / filename, "PNG")
+    return filename
+
+
+def generate_top3_fortune_carousel(article, parsed):
+    """훅 표지 + 순위 카드(2~5장) + CTA 카드로, 12지신 전부가 아니라
+    대본에서 지정한 띠만 크게 보여주는 임팩트형 카드뉴스를 만듭니다."""
+    today = datetime.utcnow().date()
+    background = generate_top3_fortune_shared_background()
+
+    filenames = [compose_top3_cover(background, parsed["hook"], len(parsed["items"]), today, article.id)]
+    for item in parsed["items"]:
+        filenames.append(compose_top3_rank_card(background, item["rank"], item["animal"], item["reason"], article.id))
+    filenames.append(compose_top3_cta(background, parsed["cta"], article.id))
+    return filenames
+
+
 def generate_fortune_reel_video(article, filenames):
     """카드뉴스 이미지 7장을 순서대로 보여주는 슬라이드쇼 영상(mp4)을
     만듭니다. imageio-ffmpeg는 ffmpeg 실행 파일을 패키지 안에 이미
@@ -6000,9 +6180,11 @@ def fortune_quick_page():
     오늘 반영할 대본 (선택)
   </label>
   <p class="small" style="margin-top:4px">
-    미리 준비한 요일별 대본(훅·TOP3·CTA·캡션)을 그대로 붙여넣으면
-    그 내용을 최대한 반영해서 만들어요. 비워두면 자동으로 주제를
-    골라서 만들어요.
+    미리 준비한 요일별 대본을 그대로 붙여넣으면 그 내용을 반영해서
+    만들어요. <strong>"N위 OO띠 - 이유"</strong> 형식이 들어있으면
+    12지신 전부가 아니라 그 순위만 크게 보여주는 빨강·블랙 톤의
+    임팩트형 카드로 만들어져요. 비워두면 자동으로 주제를 골라서
+    기존 방식(12지신 전체)으로 만들어요.
   </p>
   <textarea id="fortune_quick_brief" rows="6" style="width:100%;padding:10px;font-size:15px;box-sizing:border-box"
     placeholder="예) 오늘 통장에 돈 들어오는 띠, 지금 바로 확인하세요&#10;1위 뱀띠 - 예상치 못한 부수입&#10;2위 원숭이띠 - 미뤄뒀던 정산금 성사&#10;3위 돼지띠 - 귀인의 도움으로 재물운 상승&#10;저장하고 내일 운세도 받아가세요"></textarea>
@@ -6094,9 +6276,13 @@ async function runFortuneQuick(){
     }, '2/3 글·캡션');
     if(!d2.ok) throw new Error(d2.error || '글 생성 실패');
 
-    window.__fortuneQuickCurrentStep = '3/3 운세 카드 이미지 7장 만드는 중...';
+    window.__fortuneQuickCurrentStep = '3/3 운세 카드 이미지 만드는 중...';
     fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-    const d3 = await safeFetchJson(`/fortune-quick/${d2.article_id}/step-images`, {method:'POST'}, '3/3 카드 이미지');
+    const d3 = await safeFetchJson(`/fortune-quick/${d2.article_id}/step-images`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({custom_brief: briefText}),
+    }, '3/3 카드 이미지');
     if(!d3.ok) throw new Error(d3.error || '이미지 생성 실패');
 
     clearInterval(fortuneQuickTimer);
@@ -6147,7 +6333,14 @@ def fortune_quick_step_article():
 def fortune_quick_step_images(article_id):
     article = Article.query.get_or_404(article_id)
     try:
-        filenames = generate_fortune_carousel(article)
+        payload = request.get_json(silent=True) or {}
+        parsed_top3 = parse_top3_brief(payload.get("custom_brief"))
+        if parsed_top3:
+            # "N위 OO띠 - 이유" 형식이 대본에 있으면, 12지신 전부가 아니라
+            # 해당 순위만 크게 보여주는 강렬한 TOP N 카드로 만듭니다.
+            filenames = generate_top3_fortune_carousel(article, parsed_top3)
+        else:
+            filenames = generate_fortune_carousel(article)
         article.fortune_card_paths = json.dumps(filenames, ensure_ascii=False)
         article.fortune_card_path = filenames[0]
         db.session.commit()
