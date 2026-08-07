@@ -5882,12 +5882,36 @@ FORTUNE_DAILY_TOPICS = [
 ]
 
 
-def create_daily_fortune_article():
+def create_daily_fortune_article(custom_brief=None):
     """오늘의 운세 글 + SNS 콘텐츠(캡션)까지 만들어서 저장합니다.
-    수동 버튼과 매일 아침 자동 크론 작업이 이 함수를 같이 씁니다."""
+    수동 버튼과 매일 아침 자동 크론 작업이 이 함수를 같이 씁니다.
+
+    custom_brief가 있으면(사장님이 미리 써둔 요일별 대본을 붙여넣은
+    경우) 그 내용을 최대한 그대로 반영해서 글을 씁니다. 없으면 기존
+    방식대로 요일 순환 주제를 자동으로 고릅니다."""
     today = datetime.utcnow().date()
-    topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
-    keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
+    custom_brief = (custom_brief or "").strip()
+
+    if custom_brief:
+        topic = custom_brief.splitlines()[0][:60]
+        keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
+        notes = (
+            "아래는 오늘 이 운세 콘텐츠에 반드시 반영해야 하는 기획안입니다. "
+            "여기 적힌 훅 문구, 특정 띠, 순위(TOP3), 핵심 메시지, CTA를 "
+            "다른 주제로 바꾸지 말고 최대한 그대로 살려서 글과 카드 문구의 "
+            "톤을 맞추세요.\n\n"
+            f"{custom_brief}"
+        )
+    else:
+        topic = FORTUNE_DAILY_TOPICS[today.toordinal() % len(FORTUNE_DAILY_TOPICS)]
+        keyword = f"{today.strftime('%Y-%m-%d')} {topic}"
+        notes = (
+            "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
+            "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 "
+            "조언처럼 들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' "
+            "같은 안내를 자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, "
+            "정확한 금액 등)는 만들어내지 않는다."
+        )
 
     data = generate_article(
         keyword=keyword,
@@ -5895,13 +5919,7 @@ def create_daily_fortune_article():
         article_type="정보형",
         length="약 1,500자",
         audience="매일 아침 오늘의 운세를 가볍게 확인하고 싶은 사람",
-        notes=(
-            "재미로 보는 오늘의 운세 콘텐츠. 특정 개인을 지목하지 않고 "
-            "띠·별자리 등 일반적인 기준으로 작성한다. 의학적·재정적 확정 "
-            "조언처럼 들리지 않게 하고, 글 마지막에 '재미로 보는 콘텐츠입니다' "
-            "같은 안내를 자연스럽게 넣는다. 근거 없는 특정 수치(로또 번호, "
-            "정확한 금액 등)는 만들어내지 않는다."
-        ),
+        notes=notes,
     )
 
     tags = data.get("tags", [])
@@ -5978,7 +5996,17 @@ def fortune_quick_page():
       (1~2분). 한 번 만들어두면 다음부터는 훨씬 빨라져요.
     {% endif %}
   </div>
-  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 테스트12345 운세 만들기</button>
+  <label for="fortune_quick_brief" style="display:block;margin-top:16px;font-weight:600">
+    오늘 반영할 대본 (선택)
+  </label>
+  <p class="small" style="margin-top:4px">
+    미리 준비한 요일별 대본(훅·TOP3·CTA·캡션)을 그대로 붙여넣으면
+    그 내용을 최대한 반영해서 만들어요. 비워두면 자동으로 주제를
+    골라서 만들어요.
+  </p>
+  <textarea id="fortune_quick_brief" rows="6" style="width:100%;padding:10px;font-size:15px;box-sizing:border-box"
+    placeholder="예) 오늘 통장에 돈 들어오는 띠, 지금 바로 확인하세요&#10;1위 뱀띠 - 예상치 못한 부수입&#10;2위 원숭이띠 - 미뤄뒀던 정산금 성사&#10;3위 돼지띠 - 귀인의 도움으로 재물운 상승&#10;저장하고 내일 운세도 받아가세요"></textarea>
+  <button class="btn" id="fortune_quick_btn" type="button" style="width:100%;padding:18px;font-size:17px;margin-top:14px" onclick="runFortuneQuick()">🔮 오늘의 운세 만들기</button>
 </section>
 
 <section class="card">
@@ -6058,7 +6086,12 @@ async function runFortuneQuick(){
 
     window.__fortuneQuickCurrentStep = '2/3 글과 캡션 만드는 중...';
     fortuneQuickSetStep(window.__fortuneQuickCurrentStep);
-    const d2 = await safeFetchJson("{{ url_for('fortune_quick_step_article') }}", {method:'POST'}, '2/3 글·캡션');
+    const briefText = (document.getElementById('fortune_quick_brief').value || '').trim();
+    const d2 = await safeFetchJson("{{ url_for('fortune_quick_step_article') }}", {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({custom_brief: briefText}),
+    }, '2/3 글·캡션');
     if(!d2.ok) throw new Error(d2.error || '글 생성 실패');
 
     window.__fortuneQuickCurrentStep = '3/3 운세 카드 이미지 7장 만드는 중...';
@@ -6073,7 +6106,7 @@ async function runFortuneQuick(){
     clearInterval(fortuneQuickTimer);
     document.getElementById('fortune_quick_status').textContent = '❌ 실패했어요: ' + err.message;
     btn.disabled = false;
-    btn.innerHTML = '🔮 테스트12345 운세 만들기';
+    btn.innerHTML = '🔮 오늘의 운세 만들기';
   }
 }
 </script>
@@ -6101,7 +6134,9 @@ def fortune_quick_step_one_icon(animal):
 @app.post("/fortune-quick/step-article")
 def fortune_quick_step_article():
     try:
-        article, topic = create_daily_fortune_article()
+        payload = request.get_json(silent=True) or {}
+        custom_brief = payload.get("custom_brief")
+        article, topic = create_daily_fortune_article(custom_brief=custom_brief)
         return jsonify({"ok": True, "article_id": article.id, "topic": topic})
     except Exception as e:
         db.session.rollback()
