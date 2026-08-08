@@ -770,8 +770,7 @@ def compose_fortune_promo(background, today, article_id):
     body_font = get_korean_font(30, bold=False)
     url_font = get_korean_font(34, bold=True)
 
-    fortune_url = os.getenv("FORTUNE_URL", "https://ai-blog-factory.onrender.com/fortune/")
-    title_lines = ["나만의 자세한 운세가", "궁금하다면?"]
+    title_lines = ["매일 아침 새로운 운세로", "찾아올게요"]
 
     icon_size = int(width * 0.26)
     icon_gap = 30
@@ -800,22 +799,9 @@ def compose_fortune_promo(background, today, article_id):
     for line in title_lines:
         _centered_text(draw, line, title_font, y, width, INK)
         y += title_line_h
-
-    y += price_gap
-    _centered_text(draw, "3,000원", price_font, y, width, GOLD)
-    y += price_h
-
-    y += url_gap
-    # 사진 안에는 실제로 눌리는 링크를 넣을 수 없어서(인스타그램 등은
-    # 프로필 링크만 클릭 가능), 주소 글자를 눈에 보이게 그대로 넣습니다.
-    draw.rounded_rectangle(
-        (width * 0.12, y - 14, width * 0.88, y + url_h + 6),
-        radius=16, outline=GOLD, width=3, fill=(250, 243, 230, 255),
-    )
-    _centered_text(draw, fortune_url.replace("https://", ""), url_font, y, width, GOLD)
-    y += url_h + body_gap
-
-    _centered_text(draw, "위 주소를 눌러(또는 검색해서) 생년월일을 넣어보세요", body_font, y, width, MUTED)
+    _centered_text(draw, "오늘 하루도 힘내시고,", body_font, y, width, MUTED)
+    y += body_h + 10
+    _centered_text(draw, "좋은 일만 가득하세요", body_font, y, width, MUTED)
 
     filename = f"fortune_promo_{article_id}_{int(datetime.utcnow().timestamp())}.png"
     image.save(MEDIA_DIR / filename, "PNG")
