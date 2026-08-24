@@ -37,37 +37,45 @@
   label.field { font-size: 12px; color: var(--muted); margin: 14px 0 6px; display: block; }
   input, textarea, select { width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
     color: var(--paper); padding: 10px 12px; font-size: 13.5px; font-family: 'Inter', sans-serif; }
+  input[type=range] { padding: 0; }
+  input[type=checkbox] { width: auto; }
+  input[type=file] { padding: 8px; font-size: 12.5px; }
   textarea { min-height: 110px; line-height: 1.55; }
   textarea.output { min-height: 160px; }
   .chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .trend-chip { font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 10px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; }
   .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .toolbar-row { margin-top: 10px; }
   .btn-primary { background: var(--amber); color: #1c1400; border: none; border-radius: 8px; padding: 10px 16px;
     font-size: 13.5px; font-weight: 600; cursor: pointer; }
   .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
   .btn-ghost { background: none; color: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
     font-size: 12.5px; cursor: pointer; }
+  .btn-ghost.small { padding: 5px 8px; font-size: 11.5px; }
+  .btn-ghost.on { border-color: var(--teal); color: var(--teal); background: rgba(63,167,150,.1); }
   .error { color: var(--red); font-size: 12.5px; margin-top: 8px; }
   .stamp { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px;
     color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 3px 9px; }
   .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; border-left: 2px solid var(--line); padding-left: 10px; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
   .img-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); }
-  .img-swatch { height: 90px; }
-  .img-card-body { padding: 8px 10px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .img-card.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(63,167,150,.2); }
+  .img-swatch { height: 78px; }
+  .img-card-body { padding: 6px 8px 0; font-size: 10.5px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .img-card-actions { display: flex; gap: 6px; padding: 6px 8px 8px; }
   .nav-footer { display: flex; justify-content: space-between; margin-top: 24px; }
   .check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .check-item { font-size: 13px; }
   .check-item.on { color: var(--teal); } .check-item.off { color: var(--muted); }
-  @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .grid3 { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
 <body>
 
 <div class="eyebrow">MI CREATOR OS — 콘텐츠 조립 라인</div>
 <h1>키워드 하나로 7단계 콘텐츠 뽑기</h1>
-<div class="sub">1~4단계는 서버에서 실제 AI로 생성됩니다. 이미지·영상 단계는 프롬프트까지만 뽑고, 실제 파일 생성은 기존 나노바나나/Gemini·릴스 렌더링 기능과 연결하면 됩니다.</div>
+<div class="sub">1~4단계는 서버에서 실제 AI로 생성됩니다. 이미지·영상 단계는 프롬프트/구성까지만 뽑고, 실제 파일 생성은 기존 나노바나나/Gemini·릴스 렌더링 기능과 연결하면 됩니다.</div>
 
 <div class="stepper-wrap">
   <div class="stepper" id="stepper"></div>
@@ -81,8 +89,8 @@ const STEPS = [
   {n:2, key:'naver', label:'네이버 글', desc:'원본을 네이버 블로그 톤으로 다시 짭니다.'},
   {n:3, key:'thread', label:'스레드 글', desc:'짧고 훅 있는 스레드용 버전으로 압축합니다.'},
   {n:4, key:'shorts', label:'쇼츠 기획', desc:'장면별 대본과 화면 지시를 만듭니다.'},
-  {n:5, key:'image', label:'이미지', desc:'장면에 맞는 이미지 프롬프트를 뽑습니다.'},
-  {n:6, key:'video', label:'숏폼 영상', desc:'이미지·대본·음성을 한 벌로 묶습니다.'},
+  {n:5, key:'image', label:'이미지', desc:'장면에 맞는 이미지 8장을 뽑고 고릅니다.'},
+  {n:6, key:'video', label:'숏폼 영상', desc:'고른 이미지·대본·음성을 한 벌로 묶습니다.'},
   {n:7, key:'publish', label:'발행 페이지', desc:'전체 결과물을 검수하고 마감 도장을 찍습니다.'},
 ];
 const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미리보기','실업급여 조건','건강보험료 조정'];
@@ -92,6 +100,13 @@ const state = { active: 1, content: {}, done: {} };
 
 function esc(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function mdToHtml(md) {
+  let html = esc(md || '');
+  html = html.replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  return html.split(/\n\n+/).map(p => p.trim().startsWith('<h') ? p : ('<p>' + p.replace(/\n/g,'<br>') + '</p>')).join('\n');
 }
 
 async function callApi(step, payload) {
@@ -116,27 +131,72 @@ function renderStepper() {
 
 function goTo(n) { state.active = n; render(); }
 
-function copyText(text, btn) {
-  navigator.clipboard.writeText(text || '');
+function flashBtn(btn, text) {
   const old = btn.textContent;
-  btn.textContent = '복사됨';
+  btn.textContent = text;
   setTimeout(() => btn.textContent = old, 1200);
 }
 
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text || '');
+  flashBtn(btn, '복사됨');
+}
+
+function copyHtml(fieldKey, btn) {
+  navigator.clipboard.writeText(mdToHtml(state.content[fieldKey] || ''));
+  flashBtn(btn, '복사됨');
+}
+
+function focusEdit(taId) {
+  const el = document.getElementById(taId);
+  if (el) { el.focus(); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+}
+
+function toolbarHTML(fieldKey, taId, regenerateCall) {
+  return `<div class="row toolbar-row">
+    <button class="btn-ghost" onclick="copyText(state.content['${fieldKey}'], this)">📋 서식·이미지 복사</button>
+    <button class="btn-ghost" onclick="copyHtml('${fieldKey}', this)">&lt;/&gt; HTML 코드 복사</button>
+    <button class="btn-ghost" onclick="copyText(state.content['${fieldKey}'], this)">▤ 마크다운 복사</button>
+    <button class="btn-ghost" onclick="focusEdit('${taId}')">✏️ 직접 수정</button>
+    <button class="btn-ghost" onclick="${regenerateCall}">↻ 다시 생성</button>
+  </div>`;
+}
+
 async function runStep(key, field, payload, btn) {
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   const errBox = document.getElementById('err-' + key);
   if (errBox) errBox.textContent = '';
   try {
     const result = await callApi(key, payload);
     state.content[field] = result;
     state.done[key] = true;
+    if (key === 'image') {
+      state.content.selectedImages = Array(8).fill(false);
+      state.content.imageSeeds = Array.from({length:8}, (_,i)=>i);
+      state.content.imagesInserted = false;
+    }
     render();
   } catch (e) {
     if (errBox) errBox.textContent = e.message;
-  } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
+}
+
+function toggleImage(i) {
+  if (!state.content.selectedImages) state.content.selectedImages = Array(8).fill(false);
+  state.content.selectedImages[i] = !state.content.selectedImages[i];
+  render();
+}
+
+function reshuffleImage(i) {
+  if (!state.content.imageSeeds) state.content.imageSeeds = Array.from({length:8}, (_,x)=>x);
+  state.content.imageSeeds[i] = Math.floor(Math.random() * 360);
+  render();
+}
+
+function insertImages() {
+  state.content.imagesInserted = true;
+  render();
 }
 
 function panelHTML(s) {
@@ -156,8 +216,8 @@ function panelHTML(s) {
         ${state.done.original ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-original"></div>
-      ${c.original ? `<textarea class="output" oninput="state.content.original=this.value">${esc(c.original)}</textarea>
-      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.original, this)">복사</button></div>` : ''}
+      ${c.original ? `<textarea id="ta-original" class="output" oninput="state.content.original=this.value">${esc(c.original)}</textarea>
+      ${toolbarHTML('original','ta-original', "runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)")}` : ''}
       ${footerHTML(1, !!c.original)}
     `;
   }
@@ -174,8 +234,8 @@ function panelHTML(s) {
         ${state.done.naver ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-naver"></div>
-      ${c.naver ? `<textarea class="output" oninput="state.content.naver=this.value">${esc(c.naver)}</textarea>
-      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.naver, this)">복사</button></div>` : ''}
+      ${c.naver ? `<textarea id="ta-naver" class="output" oninput="state.content.naver=this.value">${esc(c.naver)}</textarea>
+      ${toolbarHTML('naver','ta-naver', "runStep('naver','naver',{original: state.content.original}, this)")}` : ''}
       ${footerHTML(2, !!c.naver)}
     `;
   }
@@ -190,7 +250,7 @@ function panelHTML(s) {
         ${state.done.thread ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-thread"></div>
-      ${c.thread ? `<textarea oninput="state.content.thread=this.value">${esc(c.thread)}</textarea>
+      ${c.thread ? `<textarea id="ta-thread" oninput="state.content.thread=this.value">${esc(c.thread)}</textarea>
       <div class="row"><button class="btn-ghost" onclick="copyText(state.content.thread, this)">복사</button></div>` : ''}
       ${footerHTML(3, !!c.thread)}
     `;
@@ -206,12 +266,14 @@ function panelHTML(s) {
         ${state.done.shorts ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-shorts"></div>
-      ${c.shorts ? `<textarea class="output" oninput="state.content.shorts=this.value">${esc(c.shorts)}</textarea>
-      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.shorts, this)">복사</button></div>` : ''}
+      ${c.shorts ? `<textarea id="ta-shorts" class="output" oninput="state.content.shorts=this.value">${esc(c.shorts)}</textarea>
+      ${toolbarHTML('shorts','ta-shorts', "runStep('shorts','shorts',{original: state.content.original}, this)")}` : ''}
       ${footerHTML(4, !!c.shorts)}
     `;
   }
   if (s.n === 5) {
+    if (!c.selectedImages) c.selectedImages = Array(8).fill(false);
+    if (!c.imageSeeds) c.imageSeeds = Array.from({length:8}, (_,i)=>i);
     return `
       <div class="station">STATION 05</div>
       <div class="panel-title">${s.label}</div>
@@ -219,35 +281,71 @@ function panelHTML(s) {
       <label class="field">상품/장면 참고 설명 (선택)</label>
       <input placeholder="예: 스마트폰 화면에 서로 다른 코인 가격이 떠 있는 장면" oninput="state.content.productDesc=this.value" value="${esc(c.productDesc)}" />
       <div class="row">
-        <button class="btn-primary" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">✨ 이미지 프롬프트 생성</button>
+        <button class="btn-primary" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">✨ 전체 이미지 생성</button>
+        ${c.images ? `<button class="btn-ghost" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">↻ 실패한 것만 다시 생성</button>` : ''}
         ${state.done.image ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
+      ${!c.original ? '<div class="note">1단계 원본 글이 있으면 장면에 더 잘 맞는 프롬프트가 나와요. 없어도 참고 설명만으로 생성은 가능합니다.</div>' : ''}
       <div class="error" id="err-image"></div>
+
       ${c.images ? `
-      <textarea class="output" oninput="state.content.images=this.value">${esc(c.images)}</textarea>
+      <label class="field">이미지 프롬프트 (참고용 텍스트)</label>
+      <textarea id="ta-images" class="output" oninput="state.content.images=this.value">${esc(c.images)}</textarea>
       <div class="row"><button class="btn-ghost" onclick="copyText(state.content.images, this)">복사</button></div>
-      <div class="grid3">${[0,1,2].map(i=>`<div class="img-card"><div class="img-swatch" style="background:linear-gradient(135deg, hsl(${(i*47+20)%360} 40% 22%), hsl(${(i*47+70)%360} 30% 14%))"></div><div class="img-card-body">SCENE_${i+1}.PNG · placeholder</div></div>`).join('')}</div>
-      <div class="note">실제 이미지는 기존에 쓰시는 나노바나나/Gemini 이미지 생성 기능과 연결해야 결과물이 나옵니다.</div>
+      <label class="field">이미지 8장 중 쓸 것만 고르세요</label>
+      <div class="grid3">${Array.from({length:8}).map((_,i)=>{
+        const sel = c.selectedImages[i];
+        const hue = (i*37 + (c.imageSeeds[i]||0)) % 360;
+        return `<div class="img-card ${sel?'selected':''}">
+          <div class="img-swatch" style="background:linear-gradient(135deg, hsl(${hue} 40% 22%), hsl(${(hue+50)%360} 30% 14%))"></div>
+          <div class="img-card-body">SCENE_${i+1}.PNG</div>
+          <div class="img-card-actions">
+            <button class="btn-ghost small ${sel?'on':''}" onclick="toggleImage(${i})">${sel?'✓ 사용 중':'선택'}</button>
+            <button class="btn-ghost small" onclick="reshuffleImage(${i})">↻ 재생성</button>
+          </div>
+        </div>`;
+      }).join('')}</div>
+      <div class="row">
+        <button class="btn-primary" onclick="insertImages()">🖼 선택한 이미지를 글에 삽입</button>
+        ${c.imagesInserted ? '<span class="stamp">삽입됨 (누르면 해제)</span>' : ''}
+      </div>
+      <div class="note">실제 이미지는 기존에 쓰시는 나노바나나/Gemini 이미지 생성 기능과 연결해야 진짜 사진으로 나옵니다. 지금은 고르는 화면만 프로토타입으로 만든 거예요.</div>
       ` : ''}
       ${footerHTML(5, !!c.images)}
     `;
   }
   if (s.n === 6) {
+    const chosen = (c.selectedImages || []).map((v,i)=>v?i+1:null).filter(Boolean);
     return `
       <div class="station">STATION 06</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
+      <label class="field">사용할 이미지 (5단계에서 고른 것)</label>
+      <div class="chips-row">${chosen.length ? chosen.map(n=>`<span class="trend-chip" style="border-color:var(--teal);color:var(--teal)">SCENE_${n}</span>`).join('') : '<span class="note">5단계에서 이미지를 먼저 골라주세요.</span>'}</div>
+
+      <label class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" ${c.dubbingOn?'checked':''} onchange="state.content.dubbingOn=this.checked; render()" /> 더빙 넣기</label>
+      ${c.dubbingOn ? `
       <label class="field">더빙 목소리</label>
       <select onchange="state.content.voice=this.value">${VOICES.map(v=>`<option ${c.voice===v?'selected':''}>${v}</option>`).join('')}</select>
+      <label class="field">말 속도 (${c.speed||1.0}배속, 0.9~1.5 사이)</label>
+      <input type="range" min="0.9" max="1.5" step="0.1" value="${c.speed||1.0}" oninput="state.content.speed=this.value; render()" />
+      ` : ''}
+
+      <label class="field">배경음악 (선택)</label>
+      <input type="file" onchange="state.content.bgMusicName=this.files[0]?this.files[0].name:''; render()" />
+      ${c.bgMusicName ? `<div class="note">선택된 파일: ${esc(c.bgMusicName)}</div>` : ''}
+
       <div class="row">
-        <button class="btn-primary" onclick="state.done.video=true; state.content.videoBuilt=true; render()" ${c.shorts?'':'disabled'}>✨ 숏폼 영상 초안 만들기</button>
+        <button class="btn-primary" onclick="state.done.video=true; state.content.videoBuilt=true; render()" ${chosen.length ? '' : 'disabled'}>✨ 숏폼 영상 초안 만들기</button>
+        ${c.videoBuilt ? `<button class="btn-ghost" onclick="render()">↻ 다시 구성</button>` : ''}
         ${state.done.video ? '<span class="stamp">구성 완료</span>' : ''}
       </div>
-      ${!c.shorts ? '<div class="note">4단계 쇼츠 기획안이 있어야 장면을 이어 붙일 수 있어요.</div>' : ''}
+      ${!chosen.length ? '<div class="note">4단계 쇼츠 기획안과 5단계에서 고른 이미지가 있어야 장면을 이어 붙일 수 있어요.</div>' : ''}
+
       ${c.videoBuilt ? `
       <div class="row" style="border:1px solid var(--line); border-radius:10px; padding:14px; display:block;">
         <div class="station">VIDEO DRAFT</div>
-        <div style="font-size:13px; color:var(--muted); margin-top:6px;">장면 5컷 · 이미지 3종 · 더빙: ${c.voice||VOICES[0]} · 세로 9:16</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:6px;">장면 ${chosen.length}컷 · 더빙: ${c.dubbingOn ? (c.voice||VOICES[0]) + ' · ' + (c.speed||1.0) + '배속' : '더빙 없음'} · 세로 9:16</div>
         <div class="note">실제 렌더링은 기존 릴스 생성 파이프라인(ffmpeg)과 연결해야 파일로 나옵니다.</div>
       </div>` : ''}
       ${footerHTML(6, !!c.videoBuilt)}
