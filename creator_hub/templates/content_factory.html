@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>콘텐츠 공장</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --ink: #14171a; --surface: #1c2024; --surface-2: #23282d; --line: #2f353b;
+    --paper: #edece6; --muted: #8b9096; --amber: #f0a202; --teal: #3fa796; --red: #d95d5d;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--ink); color: var(--paper); font-family: 'Inter', sans-serif; margin: 0; padding: 20px 16px 60px; }
+  .eyebrow { font-size: 11px; letter-spacing: .18em; color: var(--amber); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+  h1 { font-family: 'Oswald', sans-serif; font-size: 26px; margin: 4px 0 0; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 640px; line-height: 1.5; }
+
+  .stepper-wrap { position: relative; margin-top: 26px; overflow-x: auto; padding-bottom: 6px; }
+  .stepper { display: flex; min-width: 640px; position: relative; }
+  .stepper::before { content: ""; position: absolute; top: 17px; left: 24px; right: 24px; height: 1px;
+    background-image: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 16px); }
+  .chip { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; background: none; border: none; padding: 0 4px; position: relative; z-index: 1; }
+  .chip-circle { width: 34px; height: 34px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; border: 1.5px solid var(--line); background: var(--ink); color: var(--muted); }
+  .chip-label { font-size: 11px; margin-top: 8px; color: var(--muted); text-align: center; max-width: 78px; line-height: 1.3; }
+  .chip.active .chip-circle { border-color: var(--amber); color: var(--amber); background: rgba(240,162,2,.1); }
+  .chip.active .chip-label { color: var(--paper); font-weight: 600; }
+  .chip.done .chip-circle { border-color: var(--teal); color: var(--teal); background: rgba(63,167,150,.1); }
+  .chip.done .chip-label { color: var(--teal); }
+
+  .panel { display: none; margin-top: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .panel.show { display: block; }
+  .station { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--amber); letter-spacing: .12em; }
+  .panel-title { font-family: 'Oswald', sans-serif; font-size: 20px; margin-top: 2px; }
+  .panel-desc { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  label.field { font-size: 12px; color: var(--muted); margin: 14px 0 6px; display: block; }
+  input, textarea, select { width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--paper); padding: 10px 12px; font-size: 13.5px; font-family: 'Inter', sans-serif; }
+  textarea { min-height: 110px; line-height: 1.55; }
+  textarea.output { min-height: 160px; }
+  .chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .trend-chip { font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn-primary { background: var(--amber); color: #1c1400; border: none; border-radius: 8px; padding: 10px 16px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-ghost { background: none; color: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    font-size: 12.5px; cursor: pointer; }
+  .error { color: var(--red); font-size: 12.5px; margin-top: 8px; }
+  .stamp { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 3px 9px; }
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; border-left: 2px solid var(--line); padding-left: 10px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .img-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+  .img-swatch { height: 90px; }
+  .img-card-body { padding: 8px 10px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .nav-footer { display: flex; justify-content: space-between; margin-top: 24px; }
+  .check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .check-item { font-size: 13px; }
+  .check-item.on { color: var(--teal); } .check-item.off { color: var(--muted); }
+  @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="eyebrow">MI CREATOR OS — 콘텐츠 조립 라인</div>
+<h1>키워드 하나로 7단계 콘텐츠 뽑기</h1>
+<div class="sub">1~4단계는 서버에서 실제 AI로 생성됩니다. 이미지·영상 단계는 프롬프트까지만 뽑고, 실제 파일 생성은 기존 나노바나나/Gemini·릴스 렌더링 기능과 연결하면 됩니다.</div>
+
+<div class="stepper-wrap">
+  <div class="stepper" id="stepper"></div>
+</div>
+
+<div id="panels"></div>
+
+<script>
+const STEPS = [
+  {n:1, key:'original', label:'애드센스 원본 글', desc:'키워드 하나로 SEO 원고 초안을 뽑습니다.'},
+  {n:2, key:'naver', label:'네이버 글', desc:'원본을 네이버 블로그 톤으로 다시 짭니다.'},
+  {n:3, key:'thread', label:'스레드 글', desc:'짧고 훅 있는 스레드용 버전으로 압축합니다.'},
+  {n:4, key:'shorts', label:'쇼츠 기획', desc:'장면별 대본과 화면 지시를 만듭니다.'},
+  {n:5, key:'image', label:'이미지', desc:'장면에 맞는 이미지 프롬프트를 뽑습니다.'},
+  {n:6, key:'video', label:'숏폼 영상', desc:'이미지·대본·음성을 한 벌로 묶습니다.'},
+  {n:7, key:'publish', label:'발행 페이지', desc:'전체 결과물을 검수하고 마감 도장을 찍습니다.'},
+];
+const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미리보기','실업급여 조건','건강보험료 조정'];
+const VOICES = ['차분한 여성 (기본)','밝은 여성','차분한 남성','신뢰감 있는 남성'];
+
+const state = { active: 1, content: {}, done: {} };
+
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function callApi(step, payload) {
+  const res = await fetch('/content-factory/api/generate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ step, ...payload })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '오류가 발생했습니다.');
+  return data.result;
+}
+
+function renderStepper() {
+  const el = document.getElementById('stepper');
+  el.innerHTML = STEPS.map(s => `
+    <button class="chip ${state.active===s.n?'active':''} ${state.done[s.key]?'done':''}" onclick="goTo(${s.n})">
+      <div class="chip-circle">${state.done[s.key] ? '✓' : String(s.n).padStart(2,'0')}</div>
+      <div class="chip-label">${s.label}</div>
+    </button>`).join('');
+}
+
+function goTo(n) { state.active = n; render(); }
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text || '');
+  const old = btn.textContent;
+  btn.textContent = '복사됨';
+  setTimeout(() => btn.textContent = old, 1200);
+}
+
+async function runStep(key, field, payload, btn) {
+  btn.disabled = true;
+  const errBox = document.getElementById('err-' + key);
+  if (errBox) errBox.textContent = '';
+  try {
+    const result = await callApi(key, payload);
+    state.content[field] = result;
+    state.done[key] = true;
+    render();
+  } catch (e) {
+    if (errBox) errBox.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function panelHTML(s) {
+  const c = state.content;
+  if (s.n === 1) {
+    return `
+      <div class="station">STATION 01</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <label class="field">키워드</label>
+      <input id="kw" placeholder="예: 비트코인 시세" value="${esc(c.keyword)}" oninput="state.content.keyword=this.value" />
+      <div class="chips-row">${TRENDS.map(t=>`<span class="trend-chip" onclick="document.getElementById('kw').value='${t}'; state.content.keyword='${t}'">🔥 ${t}</span>`).join('')}</div>
+      <label class="field">최신 정보 붙여넣기 (선택)</label>
+      <textarea placeholder="반영하고 싶은 최신 내용을 붙여넣으세요." oninput="state.content.extraInfo=this.value">${esc(c.extraInfo)}</textarea>
+      <div class="row">
+        <button class="btn-primary" onclick="runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)">✨ 원본 글 생성</button>
+        ${state.done.original ? '<span class="stamp">생성 완료</span>' : ''}
+      </div>
+      <div class="error" id="err-original"></div>
+      ${c.original ? `<textarea class="output" oninput="state.content.original=this.value">${esc(c.original)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.original, this)">복사</button></div>` : ''}
+      ${footerHTML(1, !!c.original)}
+    `;
+  }
+  if (s.n === 2) {
+    if (!c.original) return emptyPrev('1단계에서 원본 글을 먼저 만들어야 해요.', 1) + footerHTML(2, !!c.naver);
+    return `
+      <div class="station">STATION 02</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <label class="field">원본 글 (1단계 결과)</label>
+      <textarea readonly style="opacity:.75">${esc(c.original)}</textarea>
+      <div class="row">
+        <button class="btn-primary" onclick="runStep('naver','naver',{original: state.content.original}, this)">✨ 네이버 글로 변환</button>
+        ${state.done.naver ? '<span class="stamp">생성 완료</span>' : ''}
+      </div>
+      <div class="error" id="err-naver"></div>
+      ${c.naver ? `<textarea class="output" oninput="state.content.naver=this.value">${esc(c.naver)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.naver, this)">복사</button></div>` : ''}
+      ${footerHTML(2, !!c.naver)}
+    `;
+  }
+  if (s.n === 3) {
+    if (!c.original) return emptyPrev('1단계 원본 글이 먼저 필요해요.', 1) + footerHTML(3, !!c.thread);
+    return `
+      <div class="station">STATION 03</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <div class="row">
+        <button class="btn-primary" onclick="runStep('thread','thread',{original: state.content.original, naver: state.content.naver||''}, this)">✨ 스레드 글 생성</button>
+        ${state.done.thread ? '<span class="stamp">생성 완료</span>' : ''}
+      </div>
+      <div class="error" id="err-thread"></div>
+      ${c.thread ? `<textarea oninput="state.content.thread=this.value">${esc(c.thread)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.thread, this)">복사</button></div>` : ''}
+      ${footerHTML(3, !!c.thread)}
+    `;
+  }
+  if (s.n === 4) {
+    if (!c.original) return emptyPrev('1단계 원본 글을 기준으로 장면을 나눕니다.', 1) + footerHTML(4, !!c.shorts);
+    return `
+      <div class="station">STATION 04</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <div class="row">
+        <button class="btn-primary" onclick="runStep('shorts','shorts',{original: state.content.original}, this)">✨ 쇼츠 기획안 생성</button>
+        ${state.done.shorts ? '<span class="stamp">생성 완료</span>' : ''}
+      </div>
+      <div class="error" id="err-shorts"></div>
+      ${c.shorts ? `<textarea class="output" oninput="state.content.shorts=this.value">${esc(c.shorts)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.shorts, this)">복사</button></div>` : ''}
+      ${footerHTML(4, !!c.shorts)}
+    `;
+  }
+  if (s.n === 5) {
+    return `
+      <div class="station">STATION 05</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <label class="field">상품/장면 참고 설명 (선택)</label>
+      <input placeholder="예: 스마트폰 화면에 서로 다른 코인 가격이 떠 있는 장면" oninput="state.content.productDesc=this.value" value="${esc(c.productDesc)}" />
+      <div class="row">
+        <button class="btn-primary" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">✨ 이미지 프롬프트 생성</button>
+        ${state.done.image ? '<span class="stamp">생성 완료</span>' : ''}
+      </div>
+      <div class="error" id="err-image"></div>
+      ${c.images ? `
+      <textarea class="output" oninput="state.content.images=this.value">${esc(c.images)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(state.content.images, this)">복사</button></div>
+      <div class="grid3">${[0,1,2].map(i=>`<div class="img-card"><div class="img-swatch" style="background:linear-gradient(135deg, hsl(${(i*47+20)%360} 40% 22%), hsl(${(i*47+70)%360} 30% 14%))"></div><div class="img-card-body">SCENE_${i+1}.PNG · placeholder</div></div>`).join('')}</div>
+      <div class="note">실제 이미지는 기존에 쓰시는 나노바나나/Gemini 이미지 생성 기능과 연결해야 결과물이 나옵니다.</div>
+      ` : ''}
+      ${footerHTML(5, !!c.images)}
+    `;
+  }
+  if (s.n === 6) {
+    return `
+      <div class="station">STATION 06</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <label class="field">더빙 목소리</label>
+      <select onchange="state.content.voice=this.value">${VOICES.map(v=>`<option ${c.voice===v?'selected':''}>${v}</option>`).join('')}</select>
+      <div class="row">
+        <button class="btn-primary" onclick="state.done.video=true; state.content.videoBuilt=true; render()" ${c.shorts?'':'disabled'}>✨ 숏폼 영상 초안 만들기</button>
+        ${state.done.video ? '<span class="stamp">구성 완료</span>' : ''}
+      </div>
+      ${!c.shorts ? '<div class="note">4단계 쇼츠 기획안이 있어야 장면을 이어 붙일 수 있어요.</div>' : ''}
+      ${c.videoBuilt ? `
+      <div class="row" style="border:1px solid var(--line); border-radius:10px; padding:14px; display:block;">
+        <div class="station">VIDEO DRAFT</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:6px;">장면 5컷 · 이미지 3종 · 더빙: ${c.voice||VOICES[0]} · 세로 9:16</div>
+        <div class="note">실제 렌더링은 기존 릴스 생성 파이프라인(ffmpeg)과 연결해야 파일로 나옵니다.</div>
+      </div>` : ''}
+      ${footerHTML(6, !!c.videoBuilt)}
+    `;
+  }
+  if (s.n === 7) {
+    const allText = [c.original,c.naver,c.thread,c.shorts,c.images].filter(Boolean).join('\n\n---\n\n');
+    return `
+      <div class="station">STATION 07</div>
+      <div class="panel-title">${s.label}</div>
+      <div class="panel-desc">${s.desc}</div>
+      <div class="check-list">${STEPS.slice(0,6).map(st=>`<div class="check-item ${state.done[st.key]?'on':'off'}">${state.done[st.key]?'✓':'·'} ${st.label} ${state.done[st.key]?'완료':'미완료'}</div>`).join('')}</div>
+      <div class="row">
+        <button class="btn-primary" onclick="state.done.publish=true; state.content.published=new Date().toLocaleString('ko-KR'); render()">🏷 발행 완료 도장 찍기</button>
+        ${c.published ? `<span class="stamp">발행됨 · ${c.published}</span>` : ''}
+      </div>
+      ${allText ? `<label class="field">전체 결과물 모아보기</label><textarea class="output" id="all-text-box" readonly>${esc(allText)}</textarea>
+      <div class="row"><button class="btn-ghost" onclick="copyText(document.getElementById('all-text-box').value, this)">복사</button></div>` : ''}
+      <div class="nav-footer"><button class="btn-ghost" onclick="goTo(6)">이전 단계</button><span></span></div>
+    `;
+  }
+}
+
+function emptyPrev(text, gotoN) {
+  return `<div class="note">${text} <span style="color:var(--amber); cursor:pointer" onclick="goTo(${gotoN})">이전 단계로 이동 →</span></div>`;
+}
+
+function footerHTML(n, nextEnabled) {
+  return `<div class="nav-footer">
+    <button class="btn-ghost" onclick="goTo(${Math.max(1,n-1)})" ${n===1?'disabled':''}>이전 단계</button>
+    <button class="btn-primary" onclick="goTo(${n+1})" ${nextEnabled?'':'disabled'}>다음 단계 →</button>
+  </div>`;
+}
+
+function render() {
+  renderStepper();
+  const wrap = document.getElementById('panels');
+  const s = STEPS.find(s => s.n === state.active);
+  wrap.innerHTML = `<div class="panel show">${panelHTML(s)}</div>`;
+}
+
+render();
+</script>
+</body>
+</html>
