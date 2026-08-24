@@ -1,30 +1,37 @@
 """
-콘텐츠 공장 (애드센스 원본 글 -> 네이버 -> 스레드 -> 쇼츠 -> 이미지 프롬프트)
+콘텐츠 공장 (애드센스 원본 글 -> 네이버 -> 스레드 -> 쇼츠 -> 이미지 -> 발행)
 
-기존 프로젝트에 추가하는 방법:
-1. 이 파일을 blueprints/content_factory.py 로 저장 (이미 있는 blueprints 폴더 안에)
-2. templates/content_factory.html 파일도 templates 폴더 안에 저장
-3. 메인 앱 파일(예: legacy_app.py) 맨 위쪽 import 부분에 아래 한 줄 추가:
-       from blueprints.content_factory import content_factory_bp
-4. app = Flask(__name__) 만든 다음 어딘가에 아래 한 줄 추가:
-       app.register_blueprint(content_factory_bp)
-5. 기존 루틴대로: Codespace에 두 파일 덮어쓰기 -> git add . -> git commit -m "콘텐츠 공장 추가" -> git push origin main -> Render Events에서 "Deploy live" 확인
+v3 변경사항:
+- 이미지 생성을 나노바나나(Gemini 2.5 Flash Image, 모델명 gemini-2.5-flash-image)로 연결
+- 카드 1개당 버튼 1번 눌러야 이미지 1장이 생성되도록 설계 (한꺼번에 8장 자동생성 금지 -> 비용 통제)
+- 텍스트 생성(원본글/네이버/스레드/쇼츠/이미지 프롬프트)은 기존과 동일하게 OpenAI 텍스트 모델 사용
 
-* MODEL 이름은 기존 사이트 다른 기능에서 쓰시던 것과 다를 수 있어요. 아래 MODEL 변수를
-  기존 코드에서 쓰시는 모델명과 같은 값으로 맞춰주세요 (예: "gpt-4o-mini", "gpt-4o" 등).
-* OPENAI_API_KEY는 이미 Render 환경변수에 등록되어 있는 걸 그대로 씁니다.
+파일 위치: creator_hub/routes/content_factory.py
+
+* requirements.txt 에 아래 한 줄이 추가되어 있어야 합니다:
+      google-genai
+* Render 환경변수에 GEMINI_API_KEY 가 등록되어 있어야 합니다.
 """
 
 import os
+import base64
+from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify
 from openai import OpenAI
+from google import genai
+
+# 텍스트 생성용 (기존과 동일하게 OpenAI 텍스트 모델 사용)
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+MODEL = "gpt-4o-mini"  # 필요하면 기존 코드에서 쓰는 모델명으로 교체하세요
+
+# 이미지 생성 파일을 기존 사이트와 같은 폴더에 저장해서 /media/<filename> 으로 바로 보이게 합니다.
+from ..legacy_app import MEDIA_DIR
+
+IMAGE_MODEL = "gemini-2.5-flash-image"  # 나노바나나
 
 content_factory_bp = Blueprint(
     "content_factory", __name__, url_prefix="/content-factory"
 )
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-MODEL = "gpt-4o-mini"  # 필요하면 기존 코드에서 쓰는 모델명으로 교체하세요
 
 
 def ask_ai(prompt, max_tokens=900):
@@ -123,5 +130,38 @@ def generate():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        # 크레딧 소진(429) 등 OpenAI 쪽 오류도 여기로 걸러져서 화면에 표시됩니다.
         return jsonify({"error": f"생성 중 오류가 발생했습니다: {e}"}), 500
+
+
+@content_factory_bp.route("/api/generate-image", methods=["POST"])
+def generate_image_route():
+    """나노바나나(Gemini 2.5 Flash Image)로 카드 1개 분량의 실제 이미지 1장을 생성합니다.
+    호출될 때마다 비용이 발생하므로, 프론트엔드는 사용자가 카드별 버튼을 눌렀을 때만 호출합니다."""
+    data = request.get_json(force=True, silent=True) or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"error": "이미지 설명을 먼저 입력하세요."}), 400
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return jsonify({"error": "Render 환경변수에 GEMINI_API_KEY가 없습니다."}), 500
+
+    try:
+        gclient = genai.Client(api_key=api_key)
+        response = gclient.models.generate_content(
+            model=IMAGE_MODEL,
+            contents=[prompt],
+        )
+        image_bytes = None
+        for part in response.candidates[0].content.parts:
+            if getattr(part, "inline_data", None) is not None:
+                image_bytes = part.inline_data.data
+                break
+        if not image_bytes:
+            raise RuntimeError("이미지 데이터가 반환되지 않았습니다.")
+
+        filename = f"content_factory_{int(datetime.utcnow().timestamp() * 1000)}.png"
+        (MEDIA_DIR / filename).write_bytes(image_bytes)
+        return jsonify({"url": f"/media/{filename}"})
+    except Exception as e:
+        return jsonify({"error": f"이미지 생성 중 오류: {e}"}), 500

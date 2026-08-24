@@ -42,6 +42,7 @@
   input[type=file] { padding: 8px; font-size: 12.5px; }
   textarea { min-height: 110px; line-height: 1.55; }
   textarea.output { min-height: 160px; }
+  textarea.small { min-height: 54px; font-size: 12px; }
   .chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .trend-chip { font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 10px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; }
@@ -54,28 +55,32 @@
     font-size: 12.5px; cursor: pointer; }
   .btn-ghost.small { padding: 5px 8px; font-size: 11.5px; }
   .btn-ghost.on { border-color: var(--teal); color: var(--teal); background: rgba(63,167,150,.1); }
+  .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
   .error { color: var(--red); font-size: 12.5px; margin-top: 8px; }
   .stamp { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px;
     color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 3px 9px; }
   .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; border-left: 2px solid var(--line); padding-left: 10px; }
-  .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
-  .img-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+  .note.cost { border-left-color: var(--amber); color: var(--amber); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
+  .img-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); padding-bottom: 10px; }
   .img-card.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(63,167,150,.2); }
-  .img-swatch { height: 78px; }
-  .img-card-body { padding: 6px 8px 0; font-size: 10.5px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
-  .img-card-actions { display: flex; gap: 6px; padding: 6px 8px 8px; }
+  .img-swatch { height: 140px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .img-swatch img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .img-swatch .placeholder-label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .img-card-body { padding: 8px 10px 0; font-size: 10.5px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .img-card-actions { display: flex; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap; }
   .nav-footer { display: flex; justify-content: space-between; margin-top: 24px; }
   .check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .check-item { font-size: 13px; }
   .check-item.on { color: var(--teal); } .check-item.off { color: var(--muted); }
-  @media (max-width: 640px) { .grid3 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 
 <div class="eyebrow">MI CREATOR OS — 콘텐츠 조립 라인</div>
 <h1>키워드 하나로 7단계 콘텐츠 뽑기</h1>
-<div class="sub">1~4단계는 서버에서 실제 AI로 생성됩니다. 이미지·영상 단계는 프롬프트/구성까지만 뽑고, 실제 파일 생성은 기존 나노바나나/Gemini·릴스 렌더링 기능과 연결하면 됩니다.</div>
+<div class="sub">1~4단계 글은 서버에서 실제 AI로 생성됩니다. 이미지는 나노바나나(Gemini)로 카드별로 직접 눌러야 생성돼요 — 누를 때마다 실제 비용이 발생하니 필요한 장면만 생성하세요.</div>
 
 <div class="stepper-wrap">
   <div class="stepper" id="stepper"></div>
@@ -89,12 +94,13 @@ const STEPS = [
   {n:2, key:'naver', label:'네이버 글', desc:'원본을 네이버 블로그 톤으로 다시 짭니다.'},
   {n:3, key:'thread', label:'스레드 글', desc:'짧고 훅 있는 스레드용 버전으로 압축합니다.'},
   {n:4, key:'shorts', label:'쇼츠 기획', desc:'장면별 대본과 화면 지시를 만듭니다.'},
-  {n:5, key:'image', label:'이미지', desc:'장면에 맞는 이미지 8장을 뽑고 고릅니다.'},
+  {n:5, key:'image', label:'이미지', desc:'장면별로 나노바나나 이미지를 직접 생성합니다.'},
   {n:6, key:'video', label:'숏폼 영상', desc:'고른 이미지·대본·음성을 한 벌로 묶습니다.'},
   {n:7, key:'publish', label:'발행 페이지', desc:'전체 결과물을 검수하고 마감 도장을 찍습니다.'},
 ];
 const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미리보기','실업급여 조건','건강보험료 조정'];
 const VOICES = ['차분한 여성 (기본)','밝은 여성','차분한 남성','신뢰감 있는 남성'];
+const IMAGE_CARD_COUNT = 8;
 
 const state = { active: 1, content: {}, done: {} };
 
@@ -120,6 +126,17 @@ async function callApi(step, payload) {
   return data.result;
 }
 
+async function callImageApi(prompt) {
+  const res = await fetch('/content-factory/api/generate-image', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ prompt })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '이미지 생성 중 오류가 발생했습니다.');
+  return data.url;
+}
+
 function renderStepper() {
   const el = document.getElementById('stepper');
   el.innerHTML = STEPS.map(s => `
@@ -132,9 +149,10 @@ function renderStepper() {
 function goTo(n) { state.active = n; render(); }
 
 function flashBtn(btn, text) {
+  if (!btn) return;
   const old = btn.textContent;
   btn.textContent = text;
-  setTimeout(() => btn.textContent = old, 1200);
+  setTimeout(() => { if (btn) btn.textContent = old; }, 1200);
 }
 
 function copyText(text, btn) {
@@ -171,9 +189,7 @@ async function runStep(key, field, payload, btn) {
     state.content[field] = result;
     state.done[key] = true;
     if (key === 'image') {
-      state.content.selectedImages = Array(8).fill(false);
-      state.content.imageSeeds = Array.from({length:8}, (_,i)=>i);
-      state.content.imagesInserted = false;
+      initImageCards();
     }
     render();
   } catch (e) {
@@ -182,15 +198,43 @@ async function runStep(key, field, payload, btn) {
   }
 }
 
-function toggleImage(i) {
-  if (!state.content.selectedImages) state.content.selectedImages = Array(8).fill(false);
-  state.content.selectedImages[i] = !state.content.selectedImages[i];
-  render();
+function initImageCards() {
+  const c = state.content;
+  const seedText = (c.productDesc || c.keyword || '').trim();
+  if (!c.imagePrompts) {
+    c.imagePrompts = Array.from({length: IMAGE_CARD_COUNT}, (_, i) =>
+      seedText ? `${seedText} — 장면 ${i+1}` : `장면 ${i+1}에 어울리는 이미지 설명을 적어주세요`);
+  }
+  if (!c.imageUrls) c.imageUrls = Array(IMAGE_CARD_COUNT).fill(null);
+  if (!c.imageLoading) c.imageLoading = Array(IMAGE_CARD_COUNT).fill(false);
+  if (!c.imageErrors) c.imageErrors = Array(IMAGE_CARD_COUNT).fill('');
+  if (!c.selectedImages) c.selectedImages = Array(IMAGE_CARD_COUNT).fill(false);
 }
 
-function reshuffleImage(i) {
-  if (!state.content.imageSeeds) state.content.imageSeeds = Array.from({length:8}, (_,x)=>x);
-  state.content.imageSeeds[i] = Math.floor(Math.random() * 360);
+function updateCardPrompt(i, value) {
+  state.content.imagePrompts[i] = value;
+}
+
+async function generateCardImage(i) {
+  const c = state.content;
+  const prompt = (c.imagePrompts[i] || '').trim();
+  if (!prompt) { c.imageErrors[i] = '이미지 설명을 먼저 입력하세요.'; render(); return; }
+  c.imageLoading[i] = true;
+  c.imageErrors[i] = '';
+  render();
+  try {
+    const url = await callImageApi(prompt);
+    c.imageUrls[i] = url + '?t=' + Date.now();
+  } catch (e) {
+    c.imageErrors[i] = e.message;
+  } finally {
+    c.imageLoading[i] = false;
+    render();
+  }
+}
+
+function toggleImage(i) {
+  state.content.selectedImages[i] = !state.content.selectedImages[i];
   render();
 }
 
@@ -272,56 +316,58 @@ function panelHTML(s) {
     `;
   }
   if (s.n === 5) {
-    if (!c.selectedImages) c.selectedImages = Array(8).fill(false);
-    if (!c.imageSeeds) c.imageSeeds = Array.from({length:8}, (_,i)=>i);
     return `
       <div class="station">STATION 05</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
-      <label class="field">상품/장면 참고 설명 (선택)</label>
+      <div class="note cost">⚠ 이미지 1장 생성마다 나노바나나(Gemini) 실제 비용이 발생해요. 필요한 장면만 눌러서 만드세요.</div>
+      <label class="field">상품/장면 참고 설명 (선택 — 카드별 설명 초안에 반영돼요)</label>
       <input placeholder="예: 스마트폰 화면에 서로 다른 코인 가격이 떠 있는 장면" oninput="state.content.productDesc=this.value" value="${esc(c.productDesc)}" />
       <div class="row">
-        <button class="btn-primary" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">✨ 전체 이미지 생성</button>
-        ${c.images ? `<button class="btn-ghost" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">↻ 실패한 것만 다시 생성</button>` : ''}
-        ${state.done.image ? '<span class="stamp">생성 완료</span>' : ''}
+        <button class="btn-ghost" onclick="runStep('image','images',{shorts: state.content.shorts||'', original: state.content.original||'', productDesc: state.content.productDesc||''}, this)">📝 이미지 프롬프트 아이디어 텍스트로 받기 (무료)</button>
       </div>
-      ${!c.original ? '<div class="note">1단계 원본 글이 있으면 장면에 더 잘 맞는 프롬프트가 나와요. 없어도 참고 설명만으로 생성은 가능합니다.</div>' : ''}
       <div class="error" id="err-image"></div>
-
       ${c.images ? `
-      <label class="field">이미지 프롬프트 (참고용 텍스트)</label>
+      <label class="field">참고용 프롬프트 아이디어</label>
       <textarea id="ta-images" class="output" oninput="state.content.images=this.value">${esc(c.images)}</textarea>
       <div class="row"><button class="btn-ghost" onclick="copyText(state.content.images, this)">복사</button></div>
-      <label class="field">이미지 8장 중 쓸 것만 고르세요</label>
-      <div class="grid3">${Array.from({length:8}).map((_,i)=>{
+      ` : ''}
+
+      ${(() => { initImageCards(); return ''; })()}
+      <label class="field">이미지 카드 8개 — 설명을 적고 "생성" 버튼을 누른 카드만 실제로 만들어져요</label>
+      <div class="grid2">${Array.from({length: IMAGE_CARD_COUNT}).map((_,i)=>{
         const sel = c.selectedImages[i];
-        const hue = (i*37 + (c.imageSeeds[i]||0)) % 360;
+        const url = c.imageUrls[i];
+        const loading = c.imageLoading[i];
+        const err = c.imageErrors[i];
         return `<div class="img-card ${sel?'selected':''}">
-          <div class="img-swatch" style="background:linear-gradient(135deg, hsl(${hue} 40% 22%), hsl(${(hue+50)%360} 30% 14%))"></div>
-          <div class="img-card-body">SCENE_${i+1}.PNG</div>
+          <div class="img-swatch">${url ? `<img src="${esc(url)}" alt="SCENE_${i+1}" />` : `<span class="placeholder-label">${loading ? '생성 중...' : 'SCENE_' + (i+1)}</span>`}</div>
+          <div class="img-card-body">SCENE_${i+1}${url ? ' · 생성됨' : ''}</div>
+          <textarea class="small" oninput="updateCardPrompt(${i}, this.value)" placeholder="이 장면의 이미지 설명">${esc(c.imagePrompts[i])}</textarea>
           <div class="img-card-actions">
-            <button class="btn-ghost small ${sel?'on':''}" onclick="toggleImage(${i})">${sel?'✓ 사용 중':'선택'}</button>
-            <button class="btn-ghost small" onclick="reshuffleImage(${i})">↻ 재생성</button>
+            <button class="btn-ghost small" onclick="generateCardImage(${i})" ${loading?'disabled':''}>${loading ? '⏳ 생성 중...' : (url ? '↻ 다시 생성 (유료)' : '🖼 이 장면 생성 (유료)')}</button>
+            ${url ? `<button class="btn-ghost small ${sel?'on':''}" onclick="toggleImage(${i})">${sel?'✓ 사용 중':'선택'}</button>` : ''}
           </div>
+          ${err ? `<div class="error" style="margin:6px 10px 0;">${esc(err)}</div>` : ''}
         </div>`;
       }).join('')}</div>
+
       <div class="row">
-        <button class="btn-primary" onclick="insertImages()">🖼 선택한 이미지를 글에 삽입</button>
-        ${c.imagesInserted ? '<span class="stamp">삽입됨 (누르면 해제)</span>' : ''}
+        <button class="btn-primary" onclick="insertImages()" ${c.selectedImages.some(Boolean) ? '' : 'disabled'}>🖼 선택한 이미지를 글에 삽입</button>
+        ${c.imagesInserted ? '<span class="stamp">삽입됨</span>' : ''}
       </div>
-      <div class="note">실제 이미지는 기존에 쓰시는 나노바나나/Gemini 이미지 생성 기능과 연결해야 진짜 사진으로 나옵니다. 지금은 고르는 화면만 프로토타입으로 만든 거예요.</div>
-      ` : ''}
-      ${footerHTML(5, !!c.images)}
+      ${footerHTML(5, c.imageUrls.some(Boolean))}
     `;
   }
   if (s.n === 6) {
+    initImageCards();
     const chosen = (c.selectedImages || []).map((v,i)=>v?i+1:null).filter(Boolean);
     return `
       <div class="station">STATION 06</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
       <label class="field">사용할 이미지 (5단계에서 고른 것)</label>
-      <div class="chips-row">${chosen.length ? chosen.map(n=>`<span class="trend-chip" style="border-color:var(--teal);color:var(--teal)">SCENE_${n}</span>`).join('') : '<span class="note">5단계에서 이미지를 먼저 골라주세요.</span>'}</div>
+      <div class="chips-row">${chosen.length ? chosen.map(n=>`<span class="trend-chip" style="border-color:var(--teal);color:var(--teal)">SCENE_${n}</span>`).join('') : '<span class="note">5단계에서 이미지를 만들고 골라주세요.</span>'}</div>
 
       <label class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" ${c.dubbingOn?'checked':''} onchange="state.content.dubbingOn=this.checked; render()" /> 더빙 넣기</label>
       ${c.dubbingOn ? `
@@ -340,7 +386,7 @@ function panelHTML(s) {
         ${c.videoBuilt ? `<button class="btn-ghost" onclick="render()">↻ 다시 구성</button>` : ''}
         ${state.done.video ? '<span class="stamp">구성 완료</span>' : ''}
       </div>
-      ${!chosen.length ? '<div class="note">4단계 쇼츠 기획안과 5단계에서 고른 이미지가 있어야 장면을 이어 붙일 수 있어요.</div>' : ''}
+      ${!chosen.length ? '<div class="note">5단계에서 이미지를 만들고 골라야 장면을 이어 붙일 수 있어요.</div>' : ''}
 
       ${c.videoBuilt ? `
       <div class="row" style="border:1px solid var(--line); border-radius:10px; padding:14px; display:block;">

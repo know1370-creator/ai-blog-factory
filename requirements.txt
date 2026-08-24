@@ -16,3 +16,4 @@ numpy
 imageio
 imageio-ffmpeg
 numpy
+google-genai
