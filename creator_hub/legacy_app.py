@@ -4083,58 +4083,38 @@ th{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;le
       <summary>☰ 전체 메뉴</summary>
       <div class="all-menu-panel">
         <div class="menu-section">
-          <div class="menu-title">콘텐츠 제작</div>
+          <div class="menu-title">1. 만들기</div>
           <div class="menu-links">
-            <a href="/fortune-quick/">🔮 오늘의 운세</a>
-            <a href="{{url_for('factory_v15.dashboard')}}">콘텐츠 팩토리</a>
-            <a href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 자동 생성</a>
-            <a href="{{url_for('assistant_v92.dashboard')}}">AI 콘텐츠 비서</a>
-            <a href="{{url_for('marketing_v14.ideas')}}">AI 아이디어 연구소</a>
-            <a href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a>
-            <a href="{{url_for('manager_v10.dashboard')}}">AI 콘텐츠 매니저</a>
+            <a href="{{url_for('home_v16.dashboard')}}#content-factory-home">✨ 새 콘텐츠 만들기</a>
+            <a href="{{url_for('marketing_v14.ideas')}}">💡 아이디어 찾기</a>
+            <a href="{{url_for('assistant_v92.dashboard')}}">🤖 AI 비서에게 묻기</a>
           </div>
         </div>
 
         <div class="menu-section">
-          <div class="menu-title">운영 관리</div>
+          <div class="menu-title">2. 관리하기</div>
           <div class="menu-links">
-            <a href="{{url_for('pipeline_v13.board')}}">콘텐츠 파이프라인</a>
-            <a href="{{url_for('marketing_v14.shooting')}}">촬영 체크리스트</a>
-            <a href="{{url_for('planner_v93.dashboard')}}">주간 콘텐츠 플래너</a>
-            <a href="{{url_for('calendar_v94.dashboard')}}">콘텐츠 캘린더</a>
+            <a href="{{url_for('pipeline_v13.board')}}">📌 진행 중인 작업</a>
+            <a href="{{url_for('calendar_v94.dashboard')}}">📅 일정과 마감</a>
+            <a href="{{url_for('library_v11.dashboard')}}">🗂️ 완성 콘텐츠</a>
           </div>
         </div>
 
         <div class="menu-section">
-          <div class="menu-title">마케팅·소통</div>
+          <div class="menu-title">3. 확인하기</div>
           <div class="menu-links">
-            <a href="{{url_for('marketing_v14.dashboard')}}">AI 마케팅 센터</a>
-            <a href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a>
-            <a href="{{url_for('marketing_v14.monthly_report')}}">월간 리포트</a>
-            <a href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a>
+            <a href="{{url_for('marketing_v14.dashboard')}}">📈 성과와 리포트</a>
+            <a href="{{url_for('social_v96.dashboard')}}">💬 댓글·DM 관리</a>
+            <a href="{{url_for('business_v91.dashboard')}}">💰 수익과 비용</a>
           </div>
         </div>
 
         <div class="menu-section">
-          <div class="menu-title">사업·시스템</div>
+          <div class="menu-title">기타</div>
           <div class="menu-links">
-            <a href="{{url_for('business_v91.dashboard')}}">수익 대시보드</a>
-            <a href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a>
-          </div>
-        </div>
-
-        <div class="menu-section">
-          <div class="menu-title">고객용 서비스</div>
-          <div class="menu-links">
-            <a href="/fortune/" target="_blank">🔮 오늘의 운세 (손님용 결제 페이지)</a>
-          </div>
-        </div>
-
-        <div class="menu-section">
-          <div class="menu-title">기존 도구</div>
-          <div class="menu-links">
-            <a href="{{url_for('content_calendar')}}">기존 콘텐츠 캘린더</a>
-            <a href="{{url_for('idea_lab')}}">기존 AI 아이디어 연구소</a>
+            <a href="/fortune-quick/">🔮 운세 콘텐츠 만들기</a>
+            <a href="/fortune/" target="_blank">🛍️ 손님용 운세 페이지</a>
+            <a href="{{url_for('diagnostics_v95.dashboard')}}">⚙️ 시스템 점검</a>
           </div>
         </div>
       </div>
