@@ -16,7 +16,7 @@ v3 변경사항:
 import os
 import base64
 from datetime import datetime
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, url_for
 from openai import OpenAI
 from google import genai
 
@@ -25,7 +25,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 MODEL = "gpt-4o-mini"  # 필요하면 기존 코드에서 쓰는 모델명으로 교체하세요
 
 # 이미지 생성 파일을 기존 사이트와 같은 폴더에 저장해서 /media/<filename> 으로 바로 보이게 합니다.
-from ..legacy_app import MEDIA_DIR
+from ..legacy_app import MEDIA_DIR, Article, db, analyze_seo
 
 IMAGE_MODEL = "gemini-2.5-flash-image"  # 나노바나나
 
@@ -51,6 +51,9 @@ def build_prompt(step, data):
     naver = (data.get("naver") or "").strip()
     shorts = (data.get("shorts") or "").strip()
     product_desc = (data.get("productDesc") or "").strip()
+    brand = (data.get("brand") or "기본 브랜드").strip()
+    article_type = (data.get("articleType") or "정보형").strip()
+    length = (data.get("length") or "약 2,500자").strip()
 
     if step == "original":
         if not keyword:
@@ -59,11 +62,13 @@ def build_prompt(step, data):
             "너는 한국어 애드센스 블로그 원고를 쓰는 SEO 라이터야. "
             "아래 키워드로 검색하는 사람이 실제로 헷갈려하는 지점을 짚어주는 글을 써줘.\n"
             f"키워드: {keyword}\n"
+            f"브랜드/주제 분야: {brand}\n글 유형: {article_type}\n분량: {length}\n"
         )
         if extra_info:
             prompt += f"최신 참고 정보(가능하면 반영): {extra_info}\n"
         prompt += (
-            "조건: 제목 1줄 + 소제목 2~3개로 구성, 총 600~900자 내외, "
+            "조건: 제목 1줄, 메타 설명 1줄, 소제목과 본문, 마지막에 태그 5개를 포함하고 "
+            f"전체 분량은 {length}에 맞춰 작성. "
             "과장 광고 문구 금지, 정보 제공 목적이라는 문장을 마지막에 짧게 포함. "
             "마크다운 소제목(##) 사용."
         )
@@ -83,8 +88,9 @@ def build_prompt(step, data):
         if not base:
             raise ValueError("원본 글이 먼저 필요합니다.")
         return (
-            "아래 내용을 스레드(Threads) 게시글로 압축해줘. 5~7줄, 첫 줄은 강한 훅, "
-            "마지막 줄은 질문이나 공감 유도 문장으로 끝내줘. 해시태그는 2개까지만.\n\n"
+            "아래 내용으로 SNS 묶음을 만들어줘. 반드시 [인스타그램], [Threads] 두 구역으로 나누고, "
+            "인스타그램은 훅·본문·CTA·해시태그를 포함해줘. Threads는 5~7줄, 첫 줄은 강한 훅, "
+            "마지막 줄은 질문이나 공감 유도로 끝내고 해시태그는 2개까지만.\n\n"
             + base
         )
 
@@ -92,9 +98,19 @@ def build_prompt(step, data):
         if not original:
             raise ValueError("원본 글이 먼저 필요합니다.")
         return (
-            "아래 글을 30초 안팎 쇼츠 대본으로 기획해줘. "
+            "아래 글을 30초 안팎 쇼츠 대본과 업로드 정보를 한 번에 만들어줘. "
             "'장면 N (초 구간): 대사 / 화면 지시' 형식으로 4~5개 장면을 만들어줘. "
-            "첫 장면은 3초 안에 시선을 잡는 훅으로.\n\n" + original
+            "첫 장면은 3초 안에 시선을 잡는 훅으로. 대본 뒤에 [유튜브 제목], [유튜브 설명], "
+            "[유튜브 태그], [틱톡 캡션] 구역을 추가해줘.\n\n" + original
+        )
+
+    if step == "seo":
+        if not original:
+            raise ValueError("원본 글이 먼저 필요합니다.")
+        return (
+            "아래 글을 SEO 관점에서 점검해줘. 100점 만점 예상 점수, 잘된 점 3개, "
+            "수정할 점 3개, 추천 제목 3개, 메타 설명 1개, 핵심 키워드와 태그 5개를 "
+            "한국어로 간결하게 정리해줘.\n\n" + original
         )
 
     if step == "image":
@@ -131,6 +147,42 @@ def generate():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"생성 중 오류가 발생했습니다: {e}"}), 500
+
+
+@content_factory_bp.route("/api/save", methods=["POST"])
+def save_to_library():
+    data = request.get_json(force=True, silent=True) or {}
+    content = data.get("content") or {}
+    original = (content.get("original") or "").strip()
+    keyword = (content.get("keyword") or "").strip()
+    if not original or not keyword:
+        return jsonify({"error": "키워드와 원본 글을 먼저 만들어 주세요."}), 400
+    try:
+        first_line = next((line.strip("# ") for line in original.splitlines() if line.strip()), keyword)
+        article = Article(
+            keyword=keyword,
+            title=first_line[:200],
+            meta_description=(content.get("seo") or "")[:500],
+            body_html=original,
+            brand_style=(content.get("brand") or "기본 브랜드"),
+            article_type=(content.get("articleType") or "정보형"),
+            audience="콘텐츠 공장에서 선택한 주제의 독자",
+            notes=(content.get("extraInfo") or ""),
+            tags="",
+        )
+        article.instagram_caption = content.get("thread") or ""
+        article.threads_text = content.get("thread") or ""
+        article.shorts_script = content.get("shorts") or ""
+        db.session.add(article)
+        db.session.flush()
+        article.seo_score, report = analyze_seo(article)
+        import json
+        article.seo_report = json.dumps(report, ensure_ascii=False)
+        db.session.commit()
+        return jsonify({"url": url_for("edit_article", article_id=article.id)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"완성본 저장 중 오류가 발생했습니다: {e}"}), 500
 
 
 @content_factory_bp.route("/api/generate-image", methods=["POST"])

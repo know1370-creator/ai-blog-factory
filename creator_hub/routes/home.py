@@ -695,7 +695,7 @@ body{
 <p class="lead">오늘의 콘텐츠, 고객관리, 수익 흐름을 한눈에 확인하세요.</p>
 </div>
 
-<a class="hero-ai-btn" href="{{url_for('assistant_v92.dashboard')}}">
+<a class="hero-ai-btn" href="{{url_for('content_factory.index')}}">
 ✨ 새 콘텐츠 만들기
 </a>
 </div>
@@ -732,7 +732,7 @@ body{
 아이디어 찾기
 </a>
 
-<a href="{{url_for('assistant_v92.dashboard')}}">
+<a href="{{url_for('content_factory.index')}}">
 <span>02</span>
 콘텐츠 만들기
 </a>

@@ -141,14 +141,17 @@
 const STEPS = [
   {n:1, key:'original', label:'애드센스 원본 글', desc:'키워드 하나로 SEO 원고 초안을 뽑습니다.'},
   {n:2, key:'naver', label:'네이버 글', desc:'원본을 네이버 블로그 톤으로 다시 짭니다.'},
-  {n:3, key:'thread', label:'스레드 글', desc:'짧고 훅 있는 스레드용 버전으로 압축합니다.'},
-  {n:4, key:'shorts', label:'쇼츠 기획', desc:'장면별 대본과 화면 지시를 만듭니다.'},
+  {n:3, key:'thread', label:'SNS 글', desc:'인스타그램과 Threads 게시물을 한 번에 만듭니다.'},
+  {n:4, key:'shorts', label:'영상 기획', desc:'쇼츠 대본과 유튜브·틱톡 업로드 정보를 만듭니다.'},
   {n:5, key:'image', label:'이미지', desc:'장면별로 나노바나나 이미지를 직접 생성합니다.'},
   {n:6, key:'video', label:'숏폼 영상', desc:'고른 이미지·대본·음성을 한 벌로 묶습니다.'},
   {n:7, key:'publish', label:'발행 페이지', desc:'전체 결과물을 검수하고 마감 도장을 찍습니다.'},
 ];
 const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미리보기','실업급여 조건','건강보험료 조정'];
 const VOICES = ['차분한 여성 (기본)','밝은 여성','차분한 남성','신뢰감 있는 남성'];
+const BRANDS = ['말썽쟁이 딸랑구','미우와 웅이','보험·재무','애터미·생활용품','쿠팡·쇼핑','오늘의 운세','기타'];
+const ARTICLE_TYPES = ['정보형','후기형','문제 해결형','공감 스토리형','비교형'];
+const LENGTHS = ['약 1,500자','약 2,500자','약 3,500자'];
 const IMAGE_CARD_COUNT = 8;
 
 const HOME_INTEGRATED = document.querySelector('.content-factory-app')?.classList.contains('home-integrated');
@@ -249,6 +252,30 @@ function renderStepper() {
     const active = el.querySelector('.chip.active');
     if (active && window.innerWidth <= 640) active.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
   });
+}
+
+async function saveFactory(btn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '저장 중…';
+  const err = document.getElementById('err-save');
+  if (err) err.textContent = '';
+  try {
+    const res = await fetch('/content-factory/api/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({content:state.content})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '저장하지 못했습니다.');
+    state.content.savedUrl = data.url;
+    state.content.published = new Date().toLocaleString('ko-KR');
+    state.done.publish = true;
+    render();
+  } catch(e) {
+    if (err) err.textContent = friendlyError(e.message);
+  } finally {
+    if (document.body.contains(btn)) { btn.disabled=false; btn.textContent=old; }
+  }
 }
 
 function goTo(n) { state.active = n; render(); }
@@ -366,16 +393,22 @@ function panelHTML(s) {
       <label class="field" for="kw">키워드 <span style="color:var(--red)">필수</span></label>
       <input id="kw" placeholder="예: 비트코인 시세" value="${esc(c.keyword)}" oninput="updateKeyword(this.value)" />
       <div class="chips-row">${TRENDS.map(t=>`<button type="button" class="trend-chip" onclick="chooseTrend('${t}', this)">🔥 ${t}</button>`).join('')}</div>
+      <div class="grid2">
+        <div><label class="field">브랜드·주제 분야</label><select onchange="state.content.brand=this.value">${BRANDS.map(v=>`<option ${c.brand===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div><label class="field">글 유형</label><select onchange="state.content.articleType=this.value">${ARTICLE_TYPES.map(v=>`<option ${c.articleType===v?'selected':''}>${v}</option>`).join('')}</select></div>
+      </div>
+      <label class="field">글 분량</label>
+      <select onchange="state.content.length=this.value">${LENGTHS.map(v=>`<option ${c.length===v?'selected':''}>${v}</option>`).join('')}</select>
       <label class="field">최신 정보 붙여넣기 (선택)</label>
       <textarea placeholder="반영하고 싶은 최신 내용을 붙여넣으세요." oninput="state.content.extraInfo=this.value">${esc(c.extraInfo)}</textarea>
       <div class="row">
-        <button id="generate-original" class="btn-primary" onclick="runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)" ${c.keyword ? '' : 'disabled title="키워드를 먼저 입력하세요"'}>✨ 원본 글 생성</button>
+        <button id="generate-original" class="btn-primary" onclick="runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||'', brand:state.content.brand||BRANDS[0], articleType:state.content.articleType||ARTICLE_TYPES[0], length:state.content.length||LENGTHS[1]}, this)" ${c.keyword ? '' : 'disabled title="키워드를 먼저 입력하세요"'}>✨ 원본 글 생성</button>
         ${state.done.original ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div id="status-original"></div>
       <div class="error" id="err-original"></div>
       ${c.original ? `<textarea id="ta-original" class="output" oninput="state.content.original=this.value">${esc(c.original)}</textarea>
-      ${toolbarHTML('original','ta-original', "runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)")}` : ''}
+      ${toolbarHTML('original','ta-original', "runStep('original','original',{keyword:state.content.keyword,extraInfo:state.content.extraInfo||'',brand:state.content.brand||BRANDS[0],articleType:state.content.articleType||ARTICLE_TYPES[0],length:state.content.length||LENGTHS[1]},this)")}` : ''}
       ${footerHTML(1, !!c.original)}
     `;
   }
@@ -404,7 +437,7 @@ function panelHTML(s) {
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
       <div class="row">
-        <button class="btn-primary" onclick="runStep('thread','thread',{original: state.content.original, naver: state.content.naver||''}, this)">✨ 스레드 글 생성</button>
+        <button class="btn-primary" onclick="runStep('thread','thread',{original: state.content.original, naver: state.content.naver||''}, this)">✨ 인스타그램 + Threads 생성</button>
         ${state.done.thread ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-thread"></div>
@@ -420,7 +453,7 @@ function panelHTML(s) {
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
       <div class="row">
-        <button class="btn-primary" onclick="runStep('shorts','shorts',{original: state.content.original}, this)">✨ 쇼츠 기획안 생성</button>
+        <button class="btn-primary" onclick="runStep('shorts','shorts',{original: state.content.original}, this)">✨ 쇼츠 + 유튜브·틱톡 정보 생성</button>
         ${state.done.shorts ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
       <div class="error" id="err-shorts"></div>
@@ -512,16 +545,24 @@ function panelHTML(s) {
     `;
   }
   if (s.n === 7) {
-    const allText = [c.original,c.naver,c.thread,c.shorts,c.images].filter(Boolean).join('\n\n---\n\n');
+    const allText = [c.original,c.naver,c.thread,c.shorts,c.images,c.seo].filter(Boolean).join('\n\n---\n\n');
     return `
       <div class="station">STATION 07</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
       <div class="check-list">${STEPS.slice(0,6).map(st=>`<div class="check-item ${state.done[st.key]?'on':'off'}">${state.done[st.key]?'✓':'·'} ${st.label} ${state.done[st.key]?'완료':'미완료'}</div>`).join('')}</div>
       <div class="row">
-        <button class="btn-primary" onclick="state.done.publish=true; state.content.published=new Date().toLocaleString('ko-KR'); render()">🏷 발행 완료 도장 찍기</button>
-        ${c.published ? `<span class="stamp">발행됨 · ${c.published}</span>` : ''}
+        <button class="btn-ghost" onclick="runStep('seo','seo',{original:state.content.original},this)" ${c.original?'':'disabled'}>🔎 SEO 최종 점검</button>
+        ${c.seo ? '<span class="stamp">SEO 점검 완료</span>' : ''}
       </div>
+      <div class="error" id="err-seo"></div>
+      ${c.seo ? `<textarea class="output" oninput="state.content.seo=this.value">${esc(c.seo)}</textarea>` : ''}
+      <div class="row">
+        <button class="btn-primary" onclick="saveFactory(this)" ${c.original?'':'disabled'}>💾 사이트에 완성본 저장</button>
+        ${c.published ? `<span class="stamp">발행됨 · ${c.published}</span>` : ''}
+        ${c.savedUrl ? `<a class="btn-ghost" href="${esc(c.savedUrl)}">저장한 콘텐츠 열기 →</a>` : ''}
+      </div>
+      <div class="error" id="err-save"></div>
       ${allText ? `<label class="field">전체 결과물 모아보기</label><textarea class="output" id="all-text-box" readonly>${esc(allText)}</textarea>
       <div class="row"><button class="btn-ghost" onclick="copyText(document.getElementById('all-text-box').value, this)">복사</button></div>` : ''}
       <div class="nav-footer"><button class="btn-ghost" onclick="goTo(6)">이전 단계</button><span></span></div>
