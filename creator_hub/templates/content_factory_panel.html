@@ -576,7 +576,9 @@ function emptyPrev(text, gotoN) {
 
 function footerHTML(n, nextEnabled) {
   return `<div class="nav-footer">
-    <button class="btn-ghost" onclick="goTo(${Math.max(1,n-1)})" ${n===1?'disabled':''}>이전 단계</button>
+    ${n===1
+      ? '<button class="btn-ghost" onclick="location.href=\'/home/\'">← 홈으로</button>'
+      : `<button class="btn-ghost" onclick="goTo(${n-1})">← 이전 단계</button>`}
     <button class="btn-primary" onclick="goTo(${n+1})" ${nextEnabled?'':'disabled title="현재 단계의 결과를 먼저 생성하세요"'}>다음 단계 →</button>
   </div>`;
 }
