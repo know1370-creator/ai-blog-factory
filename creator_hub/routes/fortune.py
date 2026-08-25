@@ -64,17 +64,17 @@ FORTUNE_HTML = """
 <link rel="stylesheet" as="style" crossorigin
   href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
-:root{--ink:#221f2b;--muted:#7a7488;--line:#e8e3ee;--brand:#4b3f72;--brand-dark:#352c54;--brand-soft:#f4f1fb;--gold:#b8925a;--gold-soft:#faf3e6;--paper:#faf8f4;--bad:#c23b3b}
+:root{--ink:#edece6;--muted:#9aa0a6;--line:#343a40;--brand:#f0a202;--brand-dark:#f0a202;--brand-soft:#292f34;--gold:#f0a202;--gold-soft:#332a18;--paper:#101315;--bad:#e06a6a}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:'Pretendard Variable','Pretendard',-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
 .wrap{max-width:520px;margin:0 auto;padding:32px 18px 60px}
-.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;margin-bottom:16px;box-shadow:0 12px 32px rgba(43,32,74,.08)}
-h1{font-size:26px;margin:0 0 8px;color:var(--brand-dark)}
+.card{background:#1c2024;border:1px solid var(--line);border-radius:20px;padding:26px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.28)}
+h1{font-size:26px;margin:0 0 8px;color:#f3f1eb}
 p.lead{color:var(--muted);margin:0 0 20px}
 label{font-weight:700;display:block;margin:14px 0 7px}
-input,select{width:100%;border:1.5px solid #e2dced;border-radius:12px;padding:12px 13px;font:inherit;background:#fff}
+input,select{width:100%;border:1.5px solid #3b4248;border-radius:12px;padding:12px 13px;font:inherit;background:#23282d;color:#edece6;color-scheme:dark}
 input:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
-.btn{border:0;border-radius:11px;padding:14px 18px;background:var(--brand-dark);color:#fff;font-weight:700;cursor:pointer;width:100%;font-size:16px}
+.btn{border:0;border-radius:11px;padding:14px 18px;background:var(--brand-dark);color:#211704;font-weight:700;cursor:pointer;width:100%;font-size:16px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .price{font-size:28px;font-weight:900;color:var(--brand-dark)}
 .notice{font-size:13px;color:var(--muted);background:var(--paper);border-radius:10px;padding:12px;margin-top:14px;line-height:1.6}
@@ -84,7 +84,9 @@ input:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0
 .status-paid{background:#e7f5ee;color:#127a53}
 .status-failed{background:#fbe9e9;color:var(--bad)}
 .account-box{background:var(--brand-soft);border-radius:14px;padding:18px;margin-top:14px}
-.account-box strong{font-size:20px;color:var(--brand-dark)}
+.account-box strong{font-size:20px;color:#f0a202}
+#inapp_browser_notice{background:#332a18!important;border-color:#6a5122!important}
+#inapp_browser_notice p{color:#f2cf8b!important}
 </style>
 </head>
 <body>
