@@ -476,6 +476,7 @@ body{
 }
 
 .creator-studio{
+  display:none;
   position:relative;
   overflow:hidden;
   margin-bottom:18px;
@@ -695,7 +696,7 @@ body{
 </div>
 
 <a class="hero-ai-btn" href="{{url_for('assistant_v92.dashboard')}}">
-✨ AI 비서 시작
+✨ 새 콘텐츠 만들기
 </a>
 </div>
 
@@ -731,7 +732,7 @@ body{
 아이디어 찾기
 </a>
 
-<a href="#content-factory-home">
+<a href="{{url_for('assistant_v92.dashboard')}}">
 <span>02</span>
 콘텐츠 만들기
 </a>

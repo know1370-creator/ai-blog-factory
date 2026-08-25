@@ -73,8 +73,8 @@ def dashboard():
 <section class="card">
   <div class="actions" style="justify-content:space-between;margin-top:0">
     <div>
-      <h1>AI 콘텐츠 비서 <span class="status">V9.2</span></h1>
-      <p class="lead">주제 하나를 입력하면 블로그, 인스타그램, Threads, 쇼츠 대본까지 한 번에 만들어요.</p>
+      <h1>새 콘텐츠 만들기</h1>
+      <p class="lead">주제 하나로 글·이미지·영상·발행 준비까지 한 흐름에서 진행하세요.</p>
     </div>
     <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
   </div>
@@ -173,7 +173,7 @@ placeholder="예: 엄마, 과자 봉지가 왜 반이나 비어 있어?"
         recent=recent,
         progress_map=progress_map,
         prompt=prompt,
-        page_title="AI 콘텐츠 비서 | MI Creator OS V19.1",
+        page_title="새 콘텐츠 만들기 | MI Creator OS",
     )
 
 

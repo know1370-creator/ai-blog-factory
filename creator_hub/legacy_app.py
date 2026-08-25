@@ -4085,9 +4085,8 @@ th{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;le
         <div class="menu-section">
           <div class="menu-title">1. 만들기</div>
           <div class="menu-links">
-            <a href="{{url_for('home_v16.dashboard')}}#content-factory-home">✨ 새 콘텐츠 만들기</a>
+            <a href="{{url_for('assistant_v92.dashboard')}}">✨ 새 콘텐츠 만들기</a>
             <a href="{{url_for('marketing_v14.ideas')}}">💡 아이디어 찾기</a>
-            <a href="{{url_for('assistant_v92.dashboard')}}">🤖 AI 비서에게 묻기</a>
           </div>
         </div>
 
