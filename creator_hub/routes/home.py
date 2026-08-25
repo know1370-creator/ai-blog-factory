@@ -522,6 +522,37 @@ body{
 
 .factory-inline{ background:#faf8f4; }
 
+.factory-collapsible{
+  position:relative;
+  z-index:2;
+  border:1px solid #e8e3ee;
+  border-radius:16px;
+  background:#faf8f4;
+}
+
+.factory-collapsible > summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:18px 20px;
+  cursor:pointer;
+  list-style:none;
+  color:#fff;
+  border-radius:15px;
+  background:#4b3f72;
+  font-weight:900;
+}
+
+.factory-collapsible > summary::-webkit-details-marker{ display:none; }
+.factory-collapsible > summary::after{ content:"열기 ↓"; font-size:.82rem; opacity:.8; }
+.factory-collapsible[open] > summary{ border-radius:15px 15px 0 0; }
+.factory-collapsible[open] > summary::after{ content:"접기 ↑"; }
+
+/* 위 안내와 같은 기능을 반복하던 두 카드 묶음은 홈에서 숨깁니다. */
+.creator-studio + section.card,
+.grid + section.card{ display:none; }
+
 .creator-studio::after{
   content:"7 STEPS";
   position:absolute;
@@ -782,12 +813,15 @@ body{
   <a class="factory-full-link" href="{{url_for('content_factory.index')}}" target="_blank" rel="noopener">큰 화면으로 열기 ↗</a>
 </div>
 
-<div class="factory-frame-shell">
-  <div class="factory-inline">
-    {% set factory_home_mode = true %}
-    {% include "content_factory_panel.html" %}
+<details class="factory-collapsible">
+  <summary>새 콘텐츠 만들기 시작</summary>
+  <div class="factory-frame-shell">
+    <div class="factory-inline">
+      {% set factory_home_mode = true %}
+      {% include "content_factory_panel.html" %}
+    </div>
   </div>
-</div>
+</details>
 </section>
 
 <section class="card">
