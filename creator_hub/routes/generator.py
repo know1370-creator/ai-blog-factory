@@ -114,6 +114,7 @@ def build_prompt(topic, brand, category, goal, primary_format, audience, facts, 
 8. 릴스 대본은 20~35초 내외이며 장면, 촬영, 대사, 자막, 편집을 포함합니다.
 9. 해시태그는 # 없이 8~15개를 작성합니다.
 10. 모든 결과는 한국어로 작성합니다.
+11. threads_text만 친한 친구에게 말하듯 자연스러운 반말로 작성하고, 존댓말과 '~요', '~습니다' 종결은 사용하지 않습니다. 다른 결과물의 말투는 기존 설정을 따릅니다.
 
 반드시 아래 JSON 구조 하나만 출력하세요.
 {{
@@ -138,7 +139,7 @@ def build_prompt(topic, brand, category, goal, primary_format, audience, facts, 
   "meta_description": "80~150자 메타 설명",
   "blog_html": "<h2>...</h2>",
   "instagram_caption": "훅, 본문, CTA가 포함된 캡션",
-  "threads_text": "짧고 대화형인 Threads 글",
+  "threads_text": "친근하고 자연스러운 반말로 쓴 Threads 글",
   "cta": "부담 없는 행동 유도 문구",
   "hashtags": ["태그1", "태그2"],
   "shooting_props": ["필요한 소품"],

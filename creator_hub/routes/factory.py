@@ -204,9 +204,10 @@ def default_output_text(project, format_name):
     elif format_name == "Threads":
         body = (
             f"{project.title}\n\n"
-            "첫 문장에 결론이나 공감 포인트를 배치하세요.\n"
-            "짧은 문단 3~5개로 핵심만 정리하세요.\n"
-            "마지막에는 독자의 경험을 묻는 한 문장을 넣으세요."
+            "첫 문장에 결론이나 공감 포인트를 배치해.\n"
+            "친한 친구에게 말하듯 자연스러운 반말로 써.\n"
+            "짧은 문단 3~5개로 핵심만 정리하고, 존댓말은 쓰지 마.\n"
+            "마지막에는 독자의 경험을 묻는 한 문장을 넣어."
         )
     elif format_name == "블로그":
         body = (
