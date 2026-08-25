@@ -101,6 +101,10 @@
     .nav-footer button { min-width: 108px; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .generation-status::before { animation: none; } }
+  body.embedded { padding: 18px 16px 40px; }
+  body.embedded .eyebrow { margin-top: 0; }
+  body.embedded h1 { font-size: 23px; }
+  body.embedded .sub { max-width: 760px; }
 </style>
 </head>
 <body>
@@ -148,6 +152,13 @@ function loadState() {
 }
 
 const state = loadState();
+const incomingKeyword = new URLSearchParams(window.location.search).get('keyword');
+const isEmbedded = new URLSearchParams(window.location.search).get('embed') === '1';
+if (isEmbedded) document.body.classList.add('embedded');
+if (incomingKeyword) {
+  state.active = 1;
+  state.content.keyword = incomingKeyword.trim();
+}
 
 function persistState() {
   try {

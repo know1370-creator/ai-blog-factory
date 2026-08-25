@@ -475,6 +475,133 @@ body{
   box-shadow:0 8px 18px rgba(75,63,114,.12);
 }
 
+.creator-studio{
+  position:relative;
+  overflow:hidden;
+  margin-bottom:18px;
+  padding:26px;
+  border:1px solid #dcd5e7;
+  border-radius:24px;
+  background:linear-gradient(135deg,#272136 0%,#3b3150 100%);
+  color:#fff;
+  box-shadow:0 18px 42px rgba(43,32,74,.20);
+}
+
+.factory-embed-head{
+  position:relative;
+  z-index:2;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:18px;
+}
+
+.factory-embed-head h2{ margin:8px 0 5px; }
+.factory-embed-head p{ margin:0; color:#d7d0e2; line-height:1.55; }
+
+.factory-full-link{
+  flex:0 0 auto;
+  padding:10px 14px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:12px;
+  color:#fff;
+  text-decoration:none;
+  font-size:.85rem;
+  font-weight:800;
+}
+
+.factory-frame-shell{
+  position:relative;
+  z-index:2;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:18px;
+  background:#14171a;
+}
+
+.factory-frame{
+  display:block;
+  width:100%;
+  height:1120px;
+  border:0;
+  background:#14171a;
+}
+
+.creator-studio::after{
+  content:"7 STEPS";
+  position:absolute;
+  right:24px;
+  top:20px;
+  color:rgba(255,255,255,.09);
+  font-size:2.3rem;
+  font-weight:950;
+  letter-spacing:.04em;
+}
+
+.creator-studio .section-label{ color:#f2c46d; }
+.creator-studio h2{ margin:8px 0 6px; color:#fff; }
+.creator-studio-copy{ margin:0 0 18px; color:#d7d0e2; line-height:1.6; }
+
+.creator-steps{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-bottom:18px;
+}
+
+.creator-steps span{
+  padding:7px 10px;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:999px;
+  background:rgba(255,255,255,.07);
+  color:#eee9f5;
+  font-size:.78rem;
+  font-weight:750;
+}
+
+.creator-start-form{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 190px;
+  gap:10px;
+}
+
+.creator-keyword{
+  width:100%;
+  min-width:0;
+  padding:14px 16px;
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:14px;
+  background:rgba(255,255,255,.10);
+  color:#fff;
+  font:inherit;
+  outline:none;
+}
+
+.creator-keyword::placeholder{ color:#bdb5c9; }
+.creator-keyword:focus{ border-color:#f2c46d; box-shadow:0 0 0 3px rgba(242,196,109,.16); }
+
+.creator-start-btn{
+  border:0;
+  border-radius:14px;
+  background:#f0a202;
+  color:#241a08;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.creator-examples{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.creator-example{
+  border:0;
+  background:transparent;
+  color:#d7d0e2;
+  padding:3px 0;
+  font-size:.8rem;
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+
 @media(max-width:700px){
   .home-page{
     padding:14px;
@@ -494,6 +621,28 @@ body{
 
   .ai-command-form{
     grid-template-columns:1fr;
+  }
+
+  .creator-start-form{
+    grid-template-columns:1fr;
+  }
+
+  .creator-start-btn{
+    min-height:48px;
+  }
+
+  .factory-embed-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .factory-full-link{
+    width:100%;
+    text-align:center;
+  }
+
+  .factory-frame{
+    height:1200px;
   }
 
   .ai-command-actions{
@@ -560,7 +709,7 @@ body{
 아이디어 찾기
 </a>
 
-<a href="{{url_for('factory_v15.dashboard')}}">
+<a href="#content-factory-home">
 <span>02</span>
 콘텐츠 만들기
 </a>
@@ -632,47 +781,33 @@ body{
 </p>
 </section>
 
-<section class="ai-command-box">
-<div class="section-label">MI AI QUICK COMMAND</div>
-
-<div class="ai-command-title">오늘 무엇을 만들어볼까요?</div>
-
-<p class="ai-command-description">
-만들고 싶은 내용을 편하게 적어주세요. 입력창을 크게 바꾸고, 버튼은 자바스크립트 없이도 바로 작동하도록 고쳤습니다.
-</p>
-
-<form class="ai-command-form" method="post" action="{{url_for('home_v16.quick_command')}}">
-  <textarea
-    class="ai-command-input"
-    name="prompt"
-    placeholder="예: 말썽쟁이 딸 경제 인스타툰 8컷 만들어줘"
-    required
-    autofocus
-  ></textarea>
-
-  <div class="ai-command-actions">
-    <button class="ai-command-submit" type="submit">✨ AI에게 요청</button>
-    <button class="ai-command-submit secondary" type="submit">🚀 원클릭 생성</button>
+<section class="creator-studio" id="content-factory-home">
+<div class="factory-embed-head">
+  <div>
+    <div class="section-label">홈 안의 콘텐츠 공장</div>
+    <h2>키워드 하나로 7단계 콘텐츠 제작</h2>
+    <p>홈을 나가지 않고 원본 글부터 이미지·영상·발행 준비까지 진행하세요. 작업 내용은 자동 저장됩니다.</p>
   </div>
-</form>
+  <a class="factory-full-link" href="{{url_for('content_factory.index')}}" target="_blank" rel="noopener">큰 화면으로 열기 ↗</a>
+</div>
 
-<form class="quick-prompts" method="post" action="{{url_for('home_v16.quick_command')}}">
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="오늘 올릴 릴스 대본과 촬영 순서, 자막, CTA를 만들어줘">🎬 릴스</button>
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="말썽쟁이 딸과 경제 주제로 인스타툰 8컷을 만들어줘">📝 인스타툰</button>
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="오늘 사용할 블로그 글 초안을 제목과 목차까지 만들어줘">📖 블로그</button>
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="보험 상담 고객에게 보낼 자연스러운 안내 문구를 만들어줘">📈 보험</button>
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="애터미 생필품을 자연스럽게 소개하는 릴스 대본을 만들어줘">🛒 애터미</button>
-  <button class="quick-prompt-btn" type="submit" name="prompt" value="쿠팡 파트너스 상품 리뷰 콘텐츠와 캡션을 만들어줘">💰 쿠팡</button>
-</form>
+<div class="factory-frame-shell">
+  <iframe
+    class="factory-frame"
+    src="{{url_for('content_factory.index')}}?embed=1"
+    title="7단계 콘텐츠 공장"
+    loading="eager"
+  ></iframe>
+</div>
 </section>
 
 <section class="card">
 <div class="section-label">빠른 실행</div>
 <h2>무엇을 하려고 들어왔나요?</h2>
 <div class="command-grid">
-<a class="command-card" href="{{url_for('factory_v15.dashboard')}}">
+<a class="command-card" href="#content-factory-home">
 <div class="command-icon">🏭</div><div class="command-title">콘텐츠를 만들어요</div>
-<div class="small">릴스, 인스타툰, 블로그 등 여러 형식의 초안을 한곳에서 제작</div>
+<div class="small">원본 글부터 네이버·스레드·쇼츠·이미지·발행 준비까지 7단계로 제작</div>
 </a>
 <a class="command-card" href="{{url_for('pipeline_v13.board')}}">
 <div class="command-icon">📌</div><div class="command-title">진행 상황을 봐요</div>
@@ -728,10 +863,8 @@ body{
 <div class="section-label">전체 도구</div>
 <h2>업무별로 모아보기</h2>
 <div class="command-grid">
-<a class="command-card" href="{{url_for('generator_v12.dashboard')}}">
-<div class="command-title">AI 프로젝트 생성기</div><div class="small">한 주제로 멀티채널 프로젝트 생성</div></a>
-<a class="command-card" href="{{url_for('assistant_v92.dashboard')}}">
-<div class="command-title">AI 콘텐츠 비서</div><div class="small">블로그와 SNS 초안 제작</div></a>
+<a class="command-card" href="#content-factory-home">
+<div class="command-title">통합 콘텐츠 제작소</div><div class="small">한 주제로 멀티채널 콘텐츠를 7단계로 제작</div></a>
 <a class="command-card" href="{{url_for('planner_v93.dashboard')}}"><div class="command-title">주간 플래너</div><div class="small">7일 콘텐츠 계획</div></a>
 <a class="command-card" href="{{url_for('calendar_v94.dashboard')}}"><div class="command-title">월간 캘린더</div><div class="small">게시 일정과 상태 관리</div></a>
 <a class="command-card" href="{{url_for('analytics_v95.dashboard')}}"><div class="command-title">성과 입력</div><div class="small">플랫폼 실제 수치 기록</div></a>
