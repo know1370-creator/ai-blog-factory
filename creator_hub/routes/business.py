@@ -80,7 +80,6 @@ def dashboard():
       <h1>수익 대시보드 <span class="status">V9.1</span></h1>
       <p class="lead">이번 달 콘텐츠 수익, 운영비, 순이익을 한 화면에서 확인해요.</p>
     </div>
-    <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
   </div>
 
   <div class="stat-grid">

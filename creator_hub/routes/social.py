@@ -174,10 +174,6 @@ def dashboard():
       <h1>AI 소통 비서 <span class="status">V9.6</span></h1>
       <p class="lead">댓글과 문의를 정리하고 답변 초안 3개를 만든 뒤, 미경님 승인 후에만 사용합니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 
   <div class="stat-grid">

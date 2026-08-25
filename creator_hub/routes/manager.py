@@ -291,10 +291,6 @@ def dashboard():
       <h1>AI 콘텐츠 매니저 <span class="status">V10</span></h1>
       <p class="lead">오늘 할 일, 훅 제작, 릴스 촬영표, A/B 실험을 한곳에서 운영합니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('social_v96.dashboard')}}">AI 소통 비서</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 
   <div class="stat-grid">

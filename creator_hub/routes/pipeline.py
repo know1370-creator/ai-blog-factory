@@ -216,10 +216,6 @@ def board():
       <h1>콘텐츠 파이프라인 <span class="status">V13.0</span></h1>
       <p class="lead">카드를 끌어서 기획부터 게시 완료까지 흐름을 관리합니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn" href="{{url_for('generator_v12.dashboard')}}">AI 프로젝트 생성</a>
-      <a class="btn gray" href="{{url_for('library_v11.dashboard')}}">라이브러리</a>
-    </div>
   </div>
 
   <div class="stat-grid">

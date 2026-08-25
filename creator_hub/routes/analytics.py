@@ -168,10 +168,6 @@ def dashboard():
       <h1>콘텐츠 성과 분석 <span class="status">V9.5</span></h1>
       <p class="lead">실제 조회수와 반응을 기록하고, 다음 콘텐츠 방향을 데이터로 찾아요.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('diagnostics_v95.dashboard')}}">시스템 점검</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 
   <div class="stat-grid">

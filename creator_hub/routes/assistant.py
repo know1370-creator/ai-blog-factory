@@ -76,7 +76,6 @@ def dashboard():
       <h1>새 콘텐츠 만들기</h1>
       <p class="lead">주제 하나로 글·이미지·영상·발행 준비까지 한 흐름에서 진행하세요.</p>
     </div>
-    <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
   </div>
 </section>
 

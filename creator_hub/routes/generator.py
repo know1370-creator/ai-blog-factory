@@ -201,10 +201,6 @@ def dashboard():
       <h1>AI 프로젝트 자동 생성기 <span class="status">V12.0</span></h1>
       <p class="lead">주제 하나를 넣으면 인스타툰, 릴스, 블로그, 캡션, Threads와 CTA를 하나의 프로젝트로 만듭니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('library_v11.dashboard')}}">콘텐츠 라이브러리</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 </section>
 

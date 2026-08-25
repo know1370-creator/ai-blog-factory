@@ -90,10 +90,6 @@ def dashboard():
       <h1>시스템 점검 <span class="status">V9.5</span></h1>
       <p class="lead">비밀값은 보여주지 않고 연결과 설정 여부만 확인합니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('analytics_v95.dashboard')}}">성과 분석</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 
   <div class="stat-grid">

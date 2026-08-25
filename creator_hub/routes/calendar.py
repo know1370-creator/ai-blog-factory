@@ -119,10 +119,6 @@ def dashboard():
       <h1>콘텐츠 캘린더 <span class="status">V9.4.1</span></h1>
       <p class="lead">기획부터 초안, 검토, 예약, 발행완료까지 한 달 흐름을 한눈에 관리해요.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('planner_v93.dashboard')}}">주간 플래너</a>
-      <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
-    </div>
   </div>
 </section>
 

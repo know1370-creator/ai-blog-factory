@@ -260,12 +260,6 @@ def dashboard():
       <h1>AI 마케팅 센터 <span class="status">V14.0</span></h1>
       <p class="lead">직접 저장한 실제 성과를 브랜드, 채널, 콘텐츠별로 비교합니다.</p>
     </div>
-    <div class="actions" style="margin-top:0">
-      <a class="btn gray" href="{{url_for('home_v16.dashboard')}}">홈</a>
-      <a class="btn" href="{{url_for('marketing_v14.ideas')}}">아이디어 뱅크</a>
-      <a class="btn gray" href="{{url_for('marketing_v14.shooting')}}">촬영 체크리스트</a>
-      <a class="btn gray" href="{{url_for('marketing_v14.monthly_report')}}">월간 리포트</a>
-    </div>
   </div>
 
   <form method="get" class="grid">

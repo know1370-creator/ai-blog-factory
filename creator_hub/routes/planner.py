@@ -130,7 +130,6 @@ def dashboard():
       <h1>주간 콘텐츠 플래너 <span class="status">V9.3</span></h1>
       <p class="lead">주제 하나로 7일치 콘텐츠 기획을 만들고, 마음에 드는 항목만 실제 초안으로 변환해요.</p>
     </div>
-    <a class="btn gray" href="{{url_for('home')}}">홈으로</a>
   </div>
 </section>
 
