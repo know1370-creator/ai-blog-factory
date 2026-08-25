@@ -480,11 +480,11 @@ body{
   overflow:hidden;
   margin-bottom:18px;
   padding:26px;
-  border:1px solid #dcd5e7;
+  border:1px solid #e8e3ee;
   border-radius:24px;
-  background:linear-gradient(135deg,#272136 0%,#3b3150 100%);
-  color:#fff;
-  box-shadow:0 18px 42px rgba(43,32,74,.20);
+  background:#fff;
+  color:#221f2b;
+  box-shadow:0 16px 38px rgba(75,63,114,.11);
 }
 
 .factory-embed-head{
@@ -498,14 +498,14 @@ body{
 }
 
 .factory-embed-head h2{ margin:8px 0 5px; }
-.factory-embed-head p{ margin:0; color:#d7d0e2; line-height:1.55; }
+.factory-embed-head p{ margin:0; color:#7a7488; line-height:1.55; }
 
 .factory-full-link{
   flex:0 0 auto;
   padding:10px 14px;
-  border:1px solid rgba(255,255,255,.22);
+  border:1px solid #e8e3ee;
   border-radius:12px;
-  color:#fff;
+  color:#4b3f72;
   text-decoration:none;
   font-size:.85rem;
   font-weight:800;
@@ -515,27 +515,27 @@ body{
   position:relative;
   z-index:2;
   overflow:hidden;
-  border:1px solid rgba(255,255,255,.15);
+  border:1px solid #e8e3ee;
   border-radius:18px;
-  background:#14171a;
+  background:#faf8f4;
 }
 
-.factory-inline{ background:#14171a; }
+.factory-inline{ background:#faf8f4; }
 
 .creator-studio::after{
   content:"7 STEPS";
   position:absolute;
   right:24px;
   top:20px;
-  color:rgba(255,255,255,.09);
+  color:rgba(75,63,114,.06);
   font-size:2.3rem;
   font-weight:950;
   letter-spacing:.04em;
 }
 
-.creator-studio .section-label{ color:#f2c46d; }
-.creator-studio h2{ margin:8px 0 6px; color:#fff; }
-.creator-studio-copy{ margin:0 0 18px; color:#d7d0e2; line-height:1.6; }
+.creator-studio .section-label{ color:#b8925a; }
+.creator-studio h2{ margin:8px 0 6px; color:#221f2b; }
+.creator-studio-copy{ margin:0 0 18px; color:#7a7488; line-height:1.6; }
 
 .creator-steps{
   display:flex;
@@ -784,6 +784,7 @@ body{
 
 <div class="factory-frame-shell">
   <div class="factory-inline">
+    {% set factory_home_mode = true %}
     {% include "content_factory_panel.html" %}
   </div>
 </div>

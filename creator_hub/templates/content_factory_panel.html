@@ -4,9 +4,23 @@
     --ink: #14171a; --surface: #1c2024; --surface-2: #23282d; --line: #2f353b;
     --paper: #edece6; --muted: #8b9096; --amber: #f0a202; --teal: #3fa796; --red: #d95d5d;
   }
+  .content-factory-app.home-integrated {
+    --ink:#faf8f4; --surface:#fff; --surface-2:#f4f1fb; --line:#e8e3ee;
+    --paper:#221f2b; --muted:#7a7488; --amber:#b8925a; --teal:#3fa796; --red:#c84d4d;
+  }
   @scope (.content-factory-app) {
   * { box-sizing: border-box; }
   :scope { display:block; background: var(--ink); color: var(--paper); font-family: 'Inter', sans-serif; margin: 0; padding: 20px 16px 60px; border-radius:18px; }
+  :scope.home-integrated { padding:18px 18px 28px; border-radius:0; }
+  :scope.home-integrated > .eyebrow,
+  :scope.home-integrated > h1,
+  :scope.home-integrated > .sub { display:none; }
+  :scope.home-integrated .stepper-meta { margin-top:4px; }
+  :scope.home-integrated .chip-circle { background:#fff; }
+  :scope.home-integrated .panel { box-shadow:0 10px 26px rgba(75,63,114,.07); }
+  :scope.home-integrated .btn-primary { color:#fff; background:#4b3f72; }
+  :scope.home-integrated .btn-primary:disabled { background:#ebe7ef; color:#a7a0af; }
+  :scope.home-integrated .cost-box { background:#fdf9f2; }
   .eyebrow { font-size: 11px; letter-spacing: .18em; color: var(--amber); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
   h1 { font-family: 'Oswald', sans-serif; font-size: 26px; margin: 4px 0 0; }
   .sub { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 680px; line-height: 1.5; }
@@ -103,7 +117,7 @@
   }
 </style>
 
-<div class="content-factory-app">
+<div class="content-factory-app{% if factory_home_mode|default(false) %} home-integrated{% endif %}">
 
 <div class="eyebrow">MI CREATOR OS — 콘텐츠 조립 라인</div>
 <h1>키워드 하나로 7단계 콘텐츠 뽑기</h1>
