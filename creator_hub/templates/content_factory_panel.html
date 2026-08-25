@@ -17,6 +17,9 @@
   :scope.home-integrated > .sub { display:none; }
   :scope.home-integrated .stepper-meta { margin-top:4px; }
   :scope.home-integrated .chip-circle { background:#fff; }
+  :scope.home-integrated .chip-label { color:#655f70; }
+  :scope.home-integrated .chip.active .chip-label,
+  :scope.home-integrated .chip.done .chip-label { color:#287d70; }
   :scope.home-integrated .panel { box-shadow:0 10px 26px rgba(75,63,114,.07); }
   :scope.home-integrated .btn-primary { color:#fff; background:#4b3f72; }
   :scope.home-integrated .btn-primary:disabled { background:#ebe7ef; color:#a7a0af; }
@@ -148,7 +151,21 @@ const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미
 const VOICES = ['차분한 여성 (기본)','밝은 여성','차분한 남성','신뢰감 있는 남성'];
 const IMAGE_CARD_COUNT = 8;
 
-const STORAGE_KEY = 'mi-content-factory-v1';
+const HOME_INTEGRATED = document.querySelector('.content-factory-app')?.classList.contains('home-integrated');
+const STORAGE_KEY = HOME_INTEGRATED ? 'mi-content-factory-home-v1' : 'mi-content-factory-v1';
+
+function friendlyError(message, image=false) {
+  const text = String(message || '');
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(text)) {
+    return image
+      ? '이미지 생성 한도를 모두 사용했습니다. Google AI 결제·할당량을 확인한 뒤 다시 시도해 주세요.'
+      : 'AI 사용 한도를 모두 사용했습니다. 잠시 후 다시 시도하거나 API 결제·할당량을 확인해 주세요.';
+  }
+  if (/Failed to fetch|NetworkError|fetch/i.test(text)) {
+    return '서버에 연결하지 못했습니다. 잠시 후 같은 버튼을 다시 눌러 주세요.';
+  }
+  return text.length > 180 ? '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.' : text;
+}
 
 function loadState() {
   try {
@@ -284,7 +301,7 @@ async function runStep(key, field, payload, btn) {
     }
     render();
   } catch (e) {
-    if (errBox) errBox.textContent = `${e.message} 입력 내용은 보존되었습니다. 같은 버튼을 눌러 다시 시도하세요.`;
+    if (errBox) errBox.textContent = `${friendlyError(e.message)} 입력 내용은 보존되었습니다.`;
   } finally {
     if (statusBox) statusBox.textContent = '';
     if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = oldText; }
@@ -322,7 +339,7 @@ async function generateCardImage(i) {
     c.imageUrls[i] = url + '?t=' + Date.now();
     state.meta.imageGenerations = nextCount;
   } catch (e) {
-    c.imageErrors[i] = e.message;
+    c.imageErrors[i] = friendlyError(e.message, true);
   } finally {
     c.imageLoading[i] = false;
     render();
