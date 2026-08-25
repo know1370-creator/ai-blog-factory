@@ -628,6 +628,77 @@ body{
   text-underline-offset:3px;
 }
 
+/* 콘텐츠 공장과 통일한 홈 다크 테마 */
+body{
+  background:#101315!important;
+  color:#edece6!important;
+}
+
+.nav-shell{
+  background:rgba(16,19,21,.96)!important;
+  border-color:#2f353b!important;
+}
+.nav-brand,.nav-home{ color:#edece6!important; }
+.all-menu summary{ background:#1c2024!important; color:#edece6!important; border:1px solid #343a40!important; }
+.all-menu-panel{ background:#181c1f!important; border-color:#343a40!important; }
+.menu-section+.menu-section{ border-color:#343a40!important; }
+.menu-title{ color:#f0a202!important; }
+.menu-links a{ background:#23282d!important; color:#edece6!important; }
+.menu-links a:hover{ background:#2c3338!important; color:#f0a202!important; }
+
+main.wrap{ background:#101315!important; }
+.home-page{ background:#101315!important; color:#edece6; }
+.command-hero,
+.ai-recommend-card,
+.progress-dashboard,
+.ai-command-box,
+.home-page section.card{
+  background:#1c2024!important;
+  color:#edece6!important;
+  border-color:#343a40!important;
+  box-shadow:0 18px 40px rgba(0,0,0,.28)!important;
+}
+
+.stat,
+.workflow a,
+.command-card{
+  background:#23282d!important;
+  color:#edece6!important;
+  border-color:#343a40!important;
+  box-shadow:none!important;
+}
+.stat strong{ color:#f0a202!important; }
+.stat-icon{ background:#2b3136!important; }
+.workflow a:hover,.command-card:hover{
+  border-color:#f0a202!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.32)!important;
+}
+
+.home-page h1,.home-page h2,.home-page h3,
+.ai-recommend-title,.progress-title,.command-title{ color:#f3f1eb!important; }
+.home-page .lead,.home-page .small,
+.ai-recommend-text,.progress-description{ color:#9da3a8!important; }
+.section-label,.workflow a span,.progress-number{ color:#f0a202!important; }
+.task-row{ border-color:#343a40!important; }
+
+.hero-ai-btn,.ai-recommend-btn{
+  background:#f0a202!important;
+  color:#211704!important;
+  box-shadow:0 12px 28px rgba(240,162,2,.18)!important;
+}
+.progress-track{ background:#2b3136!important; }
+.progress-fill{ background:#3fa796!important; }
+
+.ai-command-input,.quick-prompt-btn,
+.ai-command-submit.secondary{
+  background:#23282d!important;
+  color:#edece6!important;
+  border-color:#343a40!important;
+}
+.ai-command-input::placeholder{ color:#777f86; }
+.ai-command-input:focus{ border-color:#f0a202!important; box-shadow:0 0 0 4px rgba(240,162,2,.12)!important; }
+.quick-prompt-btn{ color:#f0a202!important; }
+
 @media(max-width:700px){
   .home-page{
     padding:14px;
