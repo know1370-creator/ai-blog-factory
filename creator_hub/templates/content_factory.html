@@ -14,9 +14,18 @@
   body { background: var(--ink); color: var(--paper); font-family: 'Inter', sans-serif; margin: 0; padding: 20px 16px 60px; }
   .eyebrow { font-size: 11px; letter-spacing: .18em; color: var(--amber); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
   h1 { font-family: 'Oswald', sans-serif; font-size: 26px; margin: 4px 0 0; }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 640px; line-height: 1.5; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 680px; line-height: 1.5; }
+  .save-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px;
+    max-width: 680px; color: var(--muted); font-size: 11px; }
+  .save-status { display: inline-flex; align-items: center; gap: 6px; }
+  .save-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+  .reset-btn { border: 0; background: none; color: var(--muted); padding: 0; font-size: 11px; cursor: pointer; text-decoration: underline; }
 
   .stepper-wrap { position: relative; margin-top: 26px; overflow-x: auto; padding-bottom: 6px; }
+  .stepper-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+  .step-progress { color: var(--amber); }
+  .swipe-hint { display: none; }
   .stepper { display: flex; min-width: 640px; position: relative; }
   .stepper::before { content: ""; position: absolute; top: 17px; left: 24px; right: 24px; height: 1px;
     background-image: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 16px); }
@@ -46,11 +55,12 @@
   .chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .trend-chip { font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 5px 10px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; }
+  .trend-chip.on { border-color: var(--amber); color: var(--paper); background: rgba(240,162,2,.1); }
   .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
   .toolbar-row { margin-top: 10px; }
   .btn-primary { background: var(--amber); color: #1c1400; border: none; border-radius: 8px; padding: 10px 16px;
     font-size: 13.5px; font-weight: 600; cursor: pointer; }
-  .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary:disabled { opacity: 1; cursor: not-allowed; background: #343a40; color: #737a80; }
   .btn-ghost { background: none; color: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
     font-size: 12.5px; cursor: pointer; }
   .btn-ghost.small { padding: 5px 8px; font-size: 11.5px; }
@@ -61,6 +71,13 @@
     color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 3px 9px; }
   .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; border-left: 2px solid var(--line); padding-left: 10px; }
   .note.cost { border-left-color: var(--amber); color: var(--amber); }
+  .cost-box { border: 1px solid rgba(240,162,2,.42); background: rgba(240,162,2,.07); border-radius: 9px;
+    padding: 11px 12px; margin-top: 12px; color: var(--amber); font-size: 11.5px; line-height: 1.55; }
+  .cost-box strong { color: var(--paper); }
+  .generation-status { display: inline-flex; align-items: center; gap: 7px; color: var(--amber); font-size: 11.5px; }
+  .generation-status::before { content: ""; width: 10px; height: 10px; border: 2px solid var(--line); border-top-color: var(--amber);
+    border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
   .img-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); padding-bottom: 10px; }
   .img-card.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(63,167,150,.2); }
@@ -73,15 +90,30 @@
   .check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .check-item { font-size: 13px; }
   .check-item.on { color: var(--teal); } .check-item.off { color: var(--muted); }
-  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    body { padding-left: 16px; padding-right: 16px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .panel { padding: 22px; }
+    .stepper-wrap { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; scroll-snap-type: x proximity; }
+    .chip { scroll-snap-align: center; }
+    .swipe-hint { display: inline; }
+    .nav-footer { gap: 10px; }
+    .nav-footer button { min-width: 108px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .generation-status::before { animation: none; } }
 </style>
 </head>
 <body>
 
 <div class="eyebrow">MI CREATOR OS — 콘텐츠 조립 라인</div>
 <h1>키워드 하나로 7단계 콘텐츠 뽑기</h1>
-<div class="sub">1~4단계 글은 서버에서 실제 AI로 생성됩니다. 이미지는 나노바나나(Gemini)로 카드별로 직접 눌러야 생성돼요 — 누를 때마다 실제 비용이 발생하니 필요한 장면만 생성하세요.</div>
+<div class="sub">키워드 하나를 입력하면 블로그 글부터 이미지·영상·발행 페이지까지 단계별로 만들어드립니다.</div>
+<div class="save-bar">
+  <span class="save-status" id="save-status">이 브라우저에 자동 저장됩니다</span>
+  <button class="reset-btn" type="button" onclick="resetFactory()">새 작업 시작</button>
+</div>
 
+<div class="stepper-meta"><span class="step-progress" id="step-progress">STEP 1 / 7</span><span class="swipe-hint">← 좌우로 밀어 단계 보기 →</span></div>
 <div class="stepper-wrap">
   <div class="stepper" id="stepper"></div>
 </div>
@@ -102,7 +134,36 @@ const TRENDS = ['비트코인 시세','전기요금 누진세','연말정산 미
 const VOICES = ['차분한 여성 (기본)','밝은 여성','차분한 남성','신뢰감 있는 남성'];
 const IMAGE_CARD_COUNT = 8;
 
-const state = { active: 1, content: {}, done: {} };
+const STORAGE_KEY = 'mi-content-factory-v1';
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && saved.content && saved.done) {
+      return { active: Number(saved.active) || 1, content: saved.content, done: saved.done,
+        meta: saved.meta || { imageGenerations: 0 } };
+    }
+  } catch (_) {}
+  return { active: 1, content: {}, done: {}, meta: { imageGenerations: 0 } };
+}
+
+const state = loadState();
+
+function persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const el = document.getElementById('save-status');
+    if (el) el.textContent = `자동 저장됨 · ${new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}`;
+  } catch (_) {}
+}
+
+setInterval(persistState, 1500);
+
+function resetFactory() {
+  if (!confirm('현재 작업 내용을 지우고 새로 시작할까요?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
 
 function esc(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -144,6 +205,12 @@ function renderStepper() {
       <div class="chip-circle">${state.done[s.key] ? '✓' : String(s.n).padStart(2,'0')}</div>
       <div class="chip-label">${s.label}</div>
     </button>`).join('');
+  const progress = document.getElementById('step-progress');
+  if (progress) progress.textContent = `STEP ${state.active} / ${STEPS.length} · ${Math.round(state.active / STEPS.length * 100)}%`;
+  requestAnimationFrame(() => {
+    const active = el.querySelector('.chip.active');
+    if (active && window.innerWidth <= 640) active.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+  });
 }
 
 function goTo(n) { state.active = n; render(); }
@@ -181,9 +248,12 @@ function toolbarHTML(fieldKey, taId, regenerateCall) {
 }
 
 async function runStep(key, field, payload, btn) {
-  if (btn) btn.disabled = true;
+  let oldText = '';
+  if (btn) { oldText = btn.textContent; btn.disabled = true; btn.textContent = '생성 중…'; }
   const errBox = document.getElementById('err-' + key);
   if (errBox) errBox.textContent = '';
+  const statusBox = document.getElementById('status-' + key);
+  if (statusBox) statusBox.innerHTML = '<span class="generation-status">AI가 결과를 만들고 있습니다. 입력 내용은 그대로 보존됩니다.</span>';
   try {
     const result = await callApi(key, payload);
     state.content[field] = result;
@@ -193,8 +263,10 @@ async function runStep(key, field, payload, btn) {
     }
     render();
   } catch (e) {
-    if (errBox) errBox.textContent = e.message;
-    if (btn) btn.disabled = false;
+    if (errBox) errBox.textContent = `${e.message} 입력 내용은 보존되었습니다. 같은 버튼을 눌러 다시 시도하세요.`;
+  } finally {
+    if (statusBox) statusBox.textContent = '';
+    if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = oldText; }
   }
 }
 
@@ -219,12 +291,15 @@ async function generateCardImage(i) {
   const c = state.content;
   const prompt = (c.imagePrompts[i] || '').trim();
   if (!prompt) { c.imageErrors[i] = '이미지 설명을 먼저 입력하세요.'; render(); return; }
+  const nextCount = (state.meta.imageGenerations || 0) + 1;
+  if (!confirm(`이미지 1장을 생성합니다. 실제 API 비용이 발생할 수 있습니다.\n이번 작업의 생성 요청: ${nextCount}회\n계속할까요?`)) return;
   c.imageLoading[i] = true;
   c.imageErrors[i] = '';
   render();
   try {
     const url = await callImageApi(prompt);
     c.imageUrls[i] = url + '?t=' + Date.now();
+    state.meta.imageGenerations = nextCount;
   } catch (e) {
     c.imageErrors[i] = e.message;
   } finally {
@@ -250,15 +325,16 @@ function panelHTML(s) {
       <div class="station">STATION 01</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
-      <label class="field">키워드</label>
-      <input id="kw" placeholder="예: 비트코인 시세" value="${esc(c.keyword)}" oninput="state.content.keyword=this.value" />
-      <div class="chips-row">${TRENDS.map(t=>`<span class="trend-chip" onclick="document.getElementById('kw').value='${t}'; state.content.keyword='${t}'">🔥 ${t}</span>`).join('')}</div>
+      <label class="field" for="kw">키워드 <span style="color:var(--red)">필수</span></label>
+      <input id="kw" placeholder="예: 비트코인 시세" value="${esc(c.keyword)}" oninput="updateKeyword(this.value)" />
+      <div class="chips-row">${TRENDS.map(t=>`<button type="button" class="trend-chip" onclick="chooseTrend('${t}', this)">🔥 ${t}</button>`).join('')}</div>
       <label class="field">최신 정보 붙여넣기 (선택)</label>
       <textarea placeholder="반영하고 싶은 최신 내용을 붙여넣으세요." oninput="state.content.extraInfo=this.value">${esc(c.extraInfo)}</textarea>
       <div class="row">
-        <button class="btn-primary" onclick="runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)">✨ 원본 글 생성</button>
+        <button id="generate-original" class="btn-primary" onclick="runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)" ${c.keyword ? '' : 'disabled title="키워드를 먼저 입력하세요"'}>✨ 원본 글 생성</button>
         ${state.done.original ? '<span class="stamp">생성 완료</span>' : ''}
       </div>
+      <div id="status-original"></div>
       <div class="error" id="err-original"></div>
       ${c.original ? `<textarea id="ta-original" class="output" oninput="state.content.original=this.value">${esc(c.original)}</textarea>
       ${toolbarHTML('original','ta-original', "runStep('original','original',{keyword: state.content.keyword||document.getElementById('kw').value, extraInfo: state.content.extraInfo||''}, this)")}` : ''}
@@ -320,7 +396,7 @@ function panelHTML(s) {
       <div class="station">STATION 05</div>
       <div class="panel-title">${s.label}</div>
       <div class="panel-desc">${s.desc}</div>
-      <div class="note cost">⚠ 이미지 1장 생성마다 나노바나나(Gemini) 실제 비용이 발생해요. 필요한 장면만 눌러서 만드세요.</div>
+      <div class="cost-box"><strong>비용 안내</strong><br>이미지 생성 버튼을 누를 때마다 Gemini API가 1회 호출됩니다. 생성 직전에 확인창이 표시되며, 이번 작업에서는 지금까지 <strong>${state.meta.imageGenerations || 0}회</strong> 요청했습니다.</div>
       <label class="field">상품/장면 참고 설명 (선택 — 카드별 설명 초안에 반영돼요)</label>
       <input placeholder="예: 스마트폰 화면에 서로 다른 코인 가격이 떠 있는 장면" oninput="state.content.productDesc=this.value" value="${esc(c.productDesc)}" />
       <div class="row">
@@ -422,8 +498,26 @@ function emptyPrev(text, gotoN) {
 function footerHTML(n, nextEnabled) {
   return `<div class="nav-footer">
     <button class="btn-ghost" onclick="goTo(${Math.max(1,n-1)})" ${n===1?'disabled':''}>이전 단계</button>
-    <button class="btn-primary" onclick="goTo(${n+1})" ${nextEnabled?'':'disabled'}>다음 단계 →</button>
+    <button class="btn-primary" onclick="goTo(${n+1})" ${nextEnabled?'':'disabled title="현재 단계의 결과를 먼저 생성하세요"'}>다음 단계 →</button>
   </div>`;
+}
+
+function updateKeyword(value) {
+  state.content.keyword = value;
+  const btn = document.getElementById('generate-original');
+  if (btn) {
+    btn.disabled = !value.trim();
+    btn.title = value.trim() ? '' : '키워드를 먼저 입력하세요';
+  }
+  persistState();
+}
+
+function chooseTrend(value, btn) {
+  const input = document.getElementById('kw');
+  if (input) input.value = value;
+  updateKeyword(value);
+  document.querySelectorAll('.trend-chip').forEach(el => el.classList.remove('on'));
+  if (btn) btn.classList.add('on');
 }
 
 function render() {
@@ -431,6 +525,7 @@ function render() {
   const wrap = document.getElementById('panels');
   const s = STEPS.find(s => s.n === state.active);
   wrap.innerHTML = `<div class="panel show">${panelHTML(s)}</div>`;
+  persistState();
 }
 
 render();
