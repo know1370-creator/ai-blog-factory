@@ -520,13 +520,7 @@ body{
   background:#14171a;
 }
 
-.factory-frame{
-  display:block;
-  width:100%;
-  height:1120px;
-  border:0;
-  background:#14171a;
-}
+.factory-inline{ background:#14171a; }
 
 .creator-studio::after{
   content:"7 STEPS";
@@ -641,9 +635,6 @@ body{
     text-align:center;
   }
 
-  .factory-frame{
-    height:1200px;
-  }
 
   .ai-command-actions{
     grid-template-columns:1fr 1fr;
@@ -792,12 +783,9 @@ body{
 </div>
 
 <div class="factory-frame-shell">
-  <iframe
-    class="factory-frame"
-    src="{{url_for('content_factory.index')}}?embed=1"
-    title="7단계 콘텐츠 공장"
-    loading="eager"
-  ></iframe>
+  <div class="factory-inline">
+    {% include "content_factory_panel.html" %}
+  </div>
 </div>
 </section>
 
