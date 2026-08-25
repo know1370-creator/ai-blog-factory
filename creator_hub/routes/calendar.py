@@ -92,18 +92,18 @@ def dashboard():
 <style>
 .calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
 .calendar-head{font-weight:700;text-align:center;padding:10px 4px}
-.calendar-day{min-height:150px;border:1px solid #e8e8e8;border-radius:14px;padding:9px;background:#fff}
-.calendar-day.outside{opacity:.42;background:#fafafa}
-.calendar-day.today{outline:2px solid #111}
+.calendar-day{min-height:150px;border:1px solid #343a40;border-radius:14px;padding:9px;background:#23282d;color:#edece6}
+.calendar-day.outside{opacity:.48;background:#181c1f}
+.calendar-day.today{outline:2px solid #f0a202;background:#292f34}
 .day-number{font-weight:800;margin-bottom:7px}
-.plan-chip{border:1px solid #ddd;border-radius:10px;padding:7px;margin:6px 0;background:#fafafa;cursor:grab}
+.plan-chip{border:1px solid #41484f;border-radius:10px;padding:7px;margin:6px 0;background:#1c2024;cursor:grab}
 .plan-chip:active{cursor:grabbing}
 .plan-title{font-size:13px;font-weight:700;line-height:1.35}
-.plan-meta{font-size:11px;color:#666;margin-top:4px}
-.status-dot{display:inline-block;padding:2px 7px;border-radius:999px;background:#ececec;font-size:10px;margin-top:5px}
-.drop-ready{outline:2px dashed #555;background:#f7f7f7}
+.plan-meta{font-size:11px;color:#9aa0a6;margin-top:4px}
+.status-dot{display:inline-block;padding:2px 7px;border-radius:999px;background:#343b41;color:#d9dde0;font-size:10px;margin-top:5px}
+.drop-ready{outline:2px dashed #f0a202;background:#30291b}
 .stat-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
-.stat-box{border:1px solid #e8e8e8;border-radius:14px;padding:16px;background:#fff}
+.stat-box{border:1px solid #343a40;border-radius:14px;padding:16px;background:#23282d;color:#edece6}
 .stat-num{font-size:26px;font-weight:900;margin-top:5px}
 @media(max-width:900px){
   .calendar-grid{grid-template-columns:1fr}

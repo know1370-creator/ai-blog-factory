@@ -192,21 +192,21 @@ def board():
 <style>
 .pipeline-wrap{overflow-x:auto;padding-bottom:12px}
 .pipeline-board{display:grid;grid-template-columns:repeat(6,minmax(260px,1fr));gap:14px;min-width:1640px}
-.pipeline-column{background:#f7f7fb;border:1px solid #e5e7eb;border-radius:16px;padding:12px;min-height:420px}
-.pipeline-column.drag-over{outline:3px solid rgba(90,100,220,.25);background:#f0f1ff}
+.pipeline-column{background:#23282d;border:1px solid #3b4248;border-radius:16px;padding:12px;min-height:420px;color:#edece6}
+.pipeline-column.drag-over{outline:3px solid rgba(240,162,2,.35);background:#30291b}
 .pipeline-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.pipeline-card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:12px;margin-bottom:10px;cursor:grab;box-shadow:0 3px 10px rgba(0,0,0,.04)}
+.pipeline-card{background:#1c2024;border:1px solid #41484f;border-radius:14px;padding:12px;margin-bottom:10px;cursor:grab;box-shadow:0 5px 14px rgba(0,0,0,.22);color:#edece6}
 .pipeline-card:active{cursor:grabbing}
 .pipeline-card.dragging{opacity:.45}
-.progress-track{height:7px;background:#eceef3;border-radius:99px;overflow:hidden;margin:9px 0}
-.progress-fill{height:100%;background:#4b3f72}
+.progress-track{height:7px;background:#343b41;border-radius:99px;overflow:hidden;margin:9px 0}
+.progress-fill{height:100%;background:#3fa796}
 .priority-high{border-left:5px solid #dc2626}
 .priority-normal{border-left:5px solid #f59e0b}
 .priority-low{border-left:5px solid #64748b}
 .due-over{font-weight:700;color:#b91c1c}
 .due-today{font-weight:700;color:#c2410c}
-.task-row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #eceef3}
-.task-num{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#111827;color:white;font-weight:700;flex:0 0 auto}
+.task-row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #343a40}
+.task-num{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#f0a202;color:#211704;font-weight:700;flex:0 0 auto}
 @media(max-width:800px){.pipeline-board{grid-template-columns:repeat(6,250px)}}
 </style>
 
