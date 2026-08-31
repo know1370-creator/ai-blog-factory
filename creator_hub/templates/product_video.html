@@ -54,6 +54,7 @@
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 14px; }
   .gallery-item { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 9/16; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .gallery-item .remove-btn { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
     border: none; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; cursor: pointer; line-height: 1; }
   .gallery-item .tag { position: absolute; bottom: 4px; left: 4px; font-size: 9.5px; font-family: 'JetBrains Mono', monospace;
@@ -123,6 +124,22 @@
   <div class="gallery" id="gallery"></div>
 
   <div class="note" id="gallery-note" style="display:none;">사진을 최소 1장 이상 준비해야 다음 단계로 진행할 수 있어요.</div>
+
+  <span class="toggle-link" onclick="toggleVeoPanel()" id="veo-toggle-link" style="display:none;">🎬 사진을 AI가 진짜 움직이는 영상으로 만들어주기 (Veo, 훨씬 비쌈)</span>
+  <div class="ai-panel" id="veo-panel" style="display:none;">
+    <div class="cost-box"><strong>비용 안내 — 이미지 생성보다 훨씬 비쌉니다</strong><br>화질에 따라 8초 클립 1개당 대략 라이트 500~800원, 보통(Fast) 1,000~1,700원, 고화질(Standard) 4,000원대입니다. 실제 요금은 <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener" style="color:var(--amber);">Gemini API 공식 요금 페이지</a>에서 확인하세요. 한 번에 하나씩만 만들 수 있어요.</div>
+    <label class="field">화질/비용</label>
+    <select id="veo-tier" onchange="state.veoTier=this.value;">
+      <option value="lite">라이트 (가장 저렴)</option>
+      <option value="fast" selected>보통 (Fast)</option>
+      <option value="standard">고화질 (Standard, 가장 비쌈)</option>
+    </select>
+    <label class="field">움직임 설명 (선택 — 비워두면 AI가 알아서 자연스럽게 움직여줍니다)</label>
+    <textarea id="veo-prompt" placeholder="예: 카메라가 제품 주위를 천천히 돌면서 클로즈업" oninput="state.veoPrompt=this.value"></textarea>
+    <div class="note">아래 사진 갤러리에서 영상으로 만들고 싶은 사진의 "🎬 영상으로" 버튼을 눌러주세요.</div>
+    <div class="error" id="err-veo"></div>
+    <div id="veo-status-msg" style="display:none;" class="note"></div>
+  </div>
 </div>
 
 <!-- 3단계: 더빙 -->
@@ -194,8 +211,9 @@
 <script>
 const state = {
   name: '', description: '', script: '',
-  images: [], // [{url, source: 'upload'|'ai'}]
+  images: [], // [{url, source: 'upload'|'ai'|'veo'}]
   aiCount: 0, aiPrompt: '',
+  veoTier: 'fast', veoPrompt: '', veoJobStatus: null, veoJobError: '',
   dubbingOn: true, voice: '차분한 여성 (기본)', speed: 1.0, audioUrl: '',
   bgMusicName: '', bgmFilename: '', bgmVolume: 0.16,
   videoUrl: '', maxStep: 1,
@@ -311,6 +329,77 @@ function removeImage(index) {
   render();
 }
 
+function toggleVeoPanel() {
+  const panel = document.getElementById('veo-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function animateWithVeo(index) {
+  const errEl = document.getElementById('err-veo');
+  const statusEl = document.getElementById('veo-status-msg');
+  errEl.textContent = '';
+  if (state.veoJobStatus === 'pending') {
+    errEl.textContent = '이미 진행 중인 AI 영상 작업이 있어요. 끝날 때까지 기다려 주세요.';
+    return;
+  }
+  const item = state.images[index];
+  if (!item) return;
+
+  const tier = document.getElementById('veo-tier').value;
+  const prompt = (state.veoPrompt || document.getElementById('veo-prompt').value || '').trim();
+
+  state.veoJobStatus = 'pending';
+  render();
+  statusEl.style.display = 'block';
+  statusEl.textContent = '🎬 AI가 영상을 만들고 있어요... (보통 1~3분 정도 걸려요)';
+
+  try {
+    const res = await fetch('/product-video/api/generate-veo-clip', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ imageUrl: item.url, prompt, tier, durationSeconds: 8 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'AI 영상 요청 중 오류가 발생했습니다.');
+    await pollVeoStatus(data.jobId, statusEl);
+  } catch (e) {
+    errEl.textContent = e.message;
+    state.veoJobStatus = null;
+    statusEl.style.display = 'none';
+    render();
+  }
+}
+
+async function pollVeoStatus(jobId, statusEl) {
+  const errEl = document.getElementById('err-veo');
+  const poll = async () => {
+    try {
+      const res = await fetch(`/product-video/api/veo-status/${jobId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI 영상 상태 확인 중 오류가 발생했습니다.');
+
+      if (data.status === 'done') {
+        state.images.push({ url: data.url, source: 'veo' });
+        state.veoJobStatus = null;
+        statusEl.style.display = 'none';
+        render();
+        return;
+      }
+      if (data.status === 'error') {
+        throw new Error(data.error || 'AI 영상 생성에 실패했습니다.');
+      }
+      // 아직 진행 중이면 8초 뒤 다시 확인
+      setTimeout(poll, 8000);
+    } catch (e) {
+      errEl.textContent = e.message;
+      state.veoJobStatus = null;
+      statusEl.style.display = 'none';
+      render();
+    }
+  };
+  poll();
+}
+
 async function generateAudio(btn) {
   const errEl = document.getElementById('err-audio');
   errEl.textContent = '';
@@ -386,6 +475,7 @@ async function buildVideo(btn) {
         audioUrl: state.dubbingOn ? state.audioUrl : '',
         bgmFilename: state.bgmFilename || '',
         bgmVolume: state.bgmVolume || 0.16,
+        script: state.script || '',
       })
     });
     const data = await res.json();
@@ -404,14 +494,25 @@ function render() {
 
   // 갤러리
   const gallery = document.getElementById('gallery');
-  gallery.innerHTML = state.images.map((img, i) => `
+  const veoBusy = state.veoJobStatus === 'pending';
+  gallery.innerHTML = state.images.map((img, i) => {
+    const isVideo = img.source === 'veo';
+    const media = isVideo
+      ? `<video src="${img.url}" muted loop autoplay playsinline></video>`
+      : `<img src="${img.url}" alt="scene ${i+1}" />`;
+    const tagLabel = img.source === 'ai' ? 'AI 사진' : (img.source === 'veo' ? 'AI 영상' : '업로드');
+    const animateBtn = isVideo ? '' : `<button class="btn-ghost small" style="position:absolute;bottom:4px;right:4px;" onclick="animateWithVeo(${i})" ${veoBusy ? 'disabled' : ''}>🎬 영상으로</button>`;
+    return `
     <div class="gallery-item">
-      <img src="${img.url}" alt="scene ${i+1}" />
-      <span class="tag">${img.source === 'ai' ? 'AI' : '업로드'}</span>
+      ${media}
+      <span class="tag">${tagLabel}</span>
       <button class="remove-btn" onclick="removeImage(${i})">✕</button>
+      ${animateBtn}
     </div>
-  `).join('');
+  `;
+  }).join('');
   document.getElementById('gallery-note').style.display = state.images.length ? 'none' : 'block';
+  document.getElementById('veo-toggle-link').style.display = state.images.length ? 'inline-block' : 'none';
 
   // 더빙 필드 표시 여부
   document.getElementById('dubbing-fields').style.display = state.dubbingOn ? 'block' : 'none';
