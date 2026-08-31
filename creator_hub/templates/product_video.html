@@ -198,7 +198,7 @@ const state = {
   aiCount: 0, aiPrompt: '',
   dubbingOn: true, voice: '차분한 여성 (기본)', speed: 1.0, audioUrl: '',
   bgMusicName: '', bgmFilename: '', bgmVolume: 0.16,
-  videoUrl: '',
+  videoUrl: '', maxStep: 1,
 };
 
 function setActive(n) {
@@ -233,8 +233,7 @@ async function generateScript(btn) {
     if (!res.ok) throw new Error(data.error || '대본 생성 중 오류가 발생했습니다.');
     state.script = data.result;
     document.getElementById('script-output').value = state.script;
-    document.getElementById('script-output-wrap').style.display = 'block';
-    setActive(2);
+    render();
   } catch (e) {
     errEl.textContent = e.message;
   } finally {
@@ -332,7 +331,6 @@ async function generateAudio(btn) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '음성 생성 중 오류가 발생했습니다.');
     state.audioUrl = data.url;
-    setActive(4);
   } catch (e) {
     errEl.textContent = e.message;
   } finally {
@@ -402,6 +400,8 @@ async function buildVideo(btn) {
 }
 
 function render() {
+  document.getElementById('script-output-wrap').style.display = state.script ? 'block' : 'none';
+
   // 갤러리
   const gallery = document.getElementById('gallery');
   gallery.innerHTML = state.images.map((img, i) => `
@@ -444,9 +444,14 @@ function render() {
   const canBuild = state.images.length > 0 && (!state.dubbingOn || state.audioUrl);
   btnVideo.disabled = !canBuild;
 
-  // 진행 단계 표시 (사진이 있으면 3단계까지, 음성 있으면 4단계까지 열기)
-  if (state.script) setActive(state.images.length ? 3 : 2);
-  if (state.audioUrl || !state.dubbingOn) setActive(4);
+  // 진행 단계 표시: 한 번 열린 단계는 다시 잠그지 않습니다 (조건은 최댓값으로만 갱신).
+  let unlocked = state.maxStep || 1;
+  if (state.script) unlocked = Math.max(unlocked, 2);
+  if (state.images.length > 0) unlocked = Math.max(unlocked, 3);
+  if (!state.dubbingOn || state.audioUrl) unlocked = Math.max(unlocked, 4);
+  if (canBuild) unlocked = Math.max(unlocked, 5);
+  state.maxStep = unlocked;
+  setActive(unlocked);
 
   // 영상 결과
   const videoResult = document.getElementById('video-result');
@@ -454,7 +459,6 @@ function render() {
     videoResult.style.display = 'block';
     document.getElementById('video-preview').src = state.videoUrl;
     document.getElementById('video-download').href = state.videoUrl;
-    setActive(5);
   } else {
     videoResult.style.display = 'none';
   }
