@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>제품 홍보 영상 제작기</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  .product-video-app {
+    --ink: #14171a; --surface: #1c2024; --surface-2: #23282d; --line: #2f353b;
+    --paper: #edece6; --muted: #8b9096; --amber: #f0a202; --teal: #3fa796; --red: #d95d5d;
+  }
+  @scope (.product-video-app) {
+  * { box-sizing: border-box; }
+  :scope { display:block; background: var(--ink); color: var(--paper); font-family: 'Inter', sans-serif; margin: 0; padding: 20px 16px 60px; min-height: 100vh; }
+  .eyebrow { font-size: 11px; letter-spacing: .18em; color: var(--amber); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+  h1 { font-family: 'Oswald', sans-serif; font-size: 26px; margin: 4px 0 0; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 680px; line-height: 1.5; }
+
+  .section { margin-top: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; opacity: .45; pointer-events: none; }
+  .section.active { opacity: 1; pointer-events: auto; }
+  .station { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--amber); letter-spacing: .12em; }
+  .section-title { font-family: 'Oswald', sans-serif; font-size: 20px; margin-top: 2px; }
+  .section-desc { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  label.field { font-size: 12px; color: var(--muted); margin: 14px 0 6px; display: block; }
+  input, textarea, select { width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--paper); padding: 10px 12px; font-size: 13.5px; font-family: 'Inter', sans-serif; }
+  input[type=range] { padding: 0; }
+  input[type=checkbox] { width: auto; }
+  input[type=file] { padding: 8px; font-size: 12.5px; }
+  textarea { min-height: 110px; line-height: 1.55; }
+  textarea.output { min-height: 150px; }
+
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn-primary { background: var(--amber); color: #1c1400; border: none; border-radius: 8px; padding: 10px 16px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .btn-primary:disabled { opacity: 1; cursor: not-allowed; background: #343a40; color: #737a80; }
+  .btn-ghost { background: none; color: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    font-size: 12.5px; cursor: pointer; }
+  .btn-ghost.small { padding: 5px 8px; font-size: 11.5px; }
+  .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
+  a.btn-ghost { text-decoration: none; display: inline-block; }
+  .error { color: var(--red); font-size: 12.5px; margin-top: 8px; }
+  .stamp { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 3px 9px; }
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; border-left: 2px solid var(--line); padding-left: 10px; }
+  .cost-box { border: 1px solid rgba(240,162,2,.42); background: rgba(240,162,2,.07); border-radius: 9px;
+    padding: 11px 12px; margin-top: 12px; color: var(--amber); font-size: 11.5px; line-height: 1.55; }
+  .cost-box strong { color: var(--paper); }
+  .free-box { border: 1px solid rgba(63,167,150,.42); background: rgba(63,167,150,.07); border-radius: 9px;
+    padding: 11px 12px; margin-top: 12px; color: var(--teal); font-size: 11.5px; line-height: 1.55; }
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 14px; }
+  .gallery-item { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 9/16; }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-item .remove-btn { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; cursor: pointer; line-height: 1; }
+  .gallery-item .tag { position: absolute; bottom: 4px; left: 4px; font-size: 9.5px; font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,.6); color: var(--paper); padding: 2px 6px; border-radius: 999px; }
+  .ai-panel { margin-top: 14px; border: 1px dashed var(--line); border-radius: 10px; padding: 14px; }
+  .toggle-link { color: var(--teal); font-size: 12.5px; cursor: pointer; text-decoration: underline; margin-top: 12px; display: inline-block; }
+
+  details.advanced { margin-top: 14px; }
+  details.advanced summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 640px) { .section { padding: 18px; } }
+  }
+</style>
+</head>
+<body style="margin:0;background:#14171a;">
+<div class="product-video-app">
+
+<div class="eyebrow">MI CREATOR OS — 제품 홍보 영상 제작기</div>
+<h1>제품 정보 하나로 숏폼 홍보 영상 만들기</h1>
+<div class="sub">제품명만 입력하면 대본 → 사진 → 더빙 → 영상까지 순서대로 만들어드립니다. 콘텐츠 공장(블로그용)과는 별개의 독립 도구예요.</div>
+
+<!-- 1단계: 제품 정보 + 대본 -->
+<div class="section active" id="section-1">
+  <div class="station">STEP 1</div>
+  <div class="section-title">제품 정보 · 대본</div>
+  <div class="section-desc">제품명(필수)과 설명(선택)을 적으면 30초 안팎의 홍보 대본을 만들어드려요.</div>
+
+  <label class="field">제품명</label>
+  <input id="input-name" placeholder="예: 프리티케어 무선 물걸레 청소기" oninput="state.name=this.value" value="" />
+
+  <label class="field">제품 설명 (선택 — 비워두면 제품명만으로 대본 생성)</label>
+  <textarea id="input-desc" placeholder="예: 소음이 적고 물걸레 자동세척 기능이 있는 무선 청소기" oninput="state.description=this.value"></textarea>
+
+  <div class="row">
+    <button class="btn-primary" id="btn-script" onclick="generateScript(this)">✨ 대본 생성</button>
+    <span class="error" id="err-script"></span>
+  </div>
+
+  <div id="script-output-wrap" style="display:none;">
+    <label class="field">대본 (수정 가능)</label>
+    <textarea class="output" id="script-output" oninput="state.script=this.value; onScriptChanged();"></textarea>
+  </div>
+</div>
+
+<!-- 2단계: 사진 준비 -->
+<div class="section" id="section-2">
+  <div class="station">STEP 2</div>
+  <div class="section-title">사진 준비</div>
+  <div class="section-desc">실제 제품 사진을 그대로 올리는 걸 추천해요 (비용 없음). AI로 새 장면을 만들 수도 있어요 (비용 발생).</div>
+
+  <div class="free-box"><strong>실제 사진 업로드 — 비용 없음</strong><br>쿠팡·스마트스토어 등에서 다운받은 제품 사진을 그대로 올려서 쓰세요.</div>
+  <label class="field">제품 사진 업로드 (여러 장 선택 가능)</label>
+  <input type="file" accept="image/png,image/jpeg,image/webp" multiple onchange="uploadImages(this)" />
+  <div class="error" id="err-upload"></div>
+
+  <span class="toggle-link" onclick="toggleAiPanel()" id="ai-toggle-link">＋ AI로 새 장면 만들기 (유료, 필요할 때만)</span>
+  <div class="ai-panel" id="ai-panel" style="display:none;">
+    <div class="cost-box"><strong>비용 안내</strong><br>버튼을 누를 때마다 Gemini API가 1회 호출됩니다. 지금까지 이번 작업에서 <strong id="ai-count">0</strong>회 요청했습니다.</div>
+    <label class="field">장면 설명</label>
+    <textarea class="small-textarea" id="ai-prompt" placeholder="예: 흰 배경 위에 놓인 무선 청소기, 사실적인 제품 사진 스타일" oninput="state.aiPrompt=this.value"></textarea>
+    <div class="row">
+      <button class="btn-ghost" onclick="generateAiImage(this)">🖼 이 장면 생성 (유료)</button>
+    </div>
+    <div class="error" id="err-ai-image"></div>
+  </div>
+
+  <div class="gallery" id="gallery"></div>
+
+  <div class="note" id="gallery-note" style="display:none;">사진을 최소 1장 이상 준비해야 다음 단계로 진행할 수 있어요.</div>
+</div>
+
+<!-- 3단계: 더빙 -->
+<div class="section" id="section-3">
+  <div class="station">STEP 3</div>
+  <div class="section-title">더빙 (음성)</div>
+  <div class="section-desc">대본을 목소리로 읽어줍니다. 더빙 없이 무음 영상으로 만들 수도 있어요.</div>
+
+  <label class="field" style="display:flex;align-items:center;gap:8px;">
+    <input type="checkbox" id="dubbing-toggle" checked onchange="state.dubbingOn=this.checked; state.audioUrl=''; render();" /> 더빙 넣기
+  </label>
+
+  <div id="dubbing-fields">
+    <label class="field">목소리</label>
+    <select id="voice-select" onchange="state.voice=this.value; state.audioUrl=''; render();">
+      <option>차분한 여성 (기본)</option>
+      <option>밝은 여성</option>
+      <option>차분한 남성</option>
+      <option>신뢰감 있는 남성</option>
+    </select>
+    <label class="field">말 속도 (<span id="speed-label">1.0</span>배속)</label>
+    <input type="range" min="0.9" max="1.5" step="0.1" value="1.0" oninput="document.getElementById('speed-label').textContent=this.value; state.speed=this.value;" onchange="state.audioUrl=''; render();" />
+
+    <div class="row">
+      <button class="btn-ghost" id="btn-audio" onclick="generateAudio(this)">🎤 이 목소리로 대본 읽어보기</button>
+      <span class="stamp" id="audio-stamp" style="display:none;">음성 생성됨</span>
+    </div>
+    <div class="error" id="err-audio"></div>
+    <audio id="audio-preview" controls style="width:100%; margin-top:8px; display:none;"></audio>
+  </div>
+</div>
+
+<!-- 4단계: 배경음악 -->
+<div class="section" id="section-4">
+  <div class="station">STEP 4</div>
+  <div class="section-title">배경음악 (선택)</div>
+  <div class="section-desc">건너뛰어도 됩니다. 넣으면 더빙/무음 위에 낮은 볼륨으로 깔립니다.</div>
+
+  <label class="field">배경음악 파일 (MP3/WAV/M4A/AAC/OGG)</label>
+  <input type="file" accept="audio/*" onchange="uploadBgm(this)" />
+  <div class="note" id="bgm-note" style="display:none;"></div>
+  <div class="error" id="err-bgm"></div>
+
+  <div id="bgm-volume-wrap" style="display:none;">
+    <label class="field">배경음악 볼륨 (<span id="bgm-volume-label">0.16</span>)</label>
+    <input type="range" min="0.02" max="0.6" step="0.02" value="0.16" oninput="document.getElementById('bgm-volume-label').textContent=this.value; state.bgmVolume=this.value;" />
+  </div>
+</div>
+
+<!-- 5단계: 영상 만들기 -->
+<div class="section" id="section-5">
+  <div class="station">STEP 5</div>
+  <div class="section-title">영상 만들기</div>
+  <div class="section-desc">사진 + 더빙(+배경음악)을 합쳐서 세로(9:16) 숏폼 영상을 만듭니다.</div>
+
+  <div class="row">
+    <button class="btn-primary" id="btn-video" onclick="buildVideo(this)">🎬 영상 만들기</button>
+  </div>
+  <div class="error" id="err-video"></div>
+
+  <div id="video-result" style="display:none; margin-top:16px; border:1px solid var(--line); border-radius:10px; padding:14px;">
+    <video id="video-preview" controls style="width:100%; max-width:320px; border-radius:8px;"></video>
+    <div class="row"><a class="btn-ghost" id="video-download" href="#" download>⬇ 영상 다운로드</a></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const state = {
+  name: '', description: '', script: '',
+  images: [], // [{url, source: 'upload'|'ai'}]
+  aiCount: 0, aiPrompt: '',
+  dubbingOn: true, voice: '차분한 여성 (기본)', speed: 1.0, audioUrl: '',
+  bgMusicName: '', bgmFilename: '', bgmVolume: 0.16,
+  videoUrl: '',
+};
+
+function setActive(n) {
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById('section-' + i).classList.toggle('active', i <= n);
+  }
+}
+
+function onScriptChanged() {
+  // 대본이 바뀌면 이전에 만든 더빙은 무효화
+  state.audioUrl = '';
+  render();
+}
+
+async function generateScript(btn) {
+  const errEl = document.getElementById('err-script');
+  errEl.textContent = '';
+  if (!state.name.trim()) {
+    errEl.textContent = '제품명을 먼저 입력하세요.';
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 생성 중...';
+  try {
+    const res = await fetch('/product-video/api/generate-script', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name: state.name, description: state.description })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '대본 생성 중 오류가 발생했습니다.');
+    state.script = data.result;
+    document.getElementById('script-output').value = state.script;
+    document.getElementById('script-output-wrap').style.display = 'block';
+    setActive(2);
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function toggleAiPanel() {
+  const panel = document.getElementById('ai-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden && !state.aiPrompt) {
+    const seed = (state.description || state.name || '').trim();
+    if (seed) {
+      state.aiPrompt = `${seed}, 흰 배경 위 사실적인 제품 사진 스타일`;
+      document.getElementById('ai-prompt').value = state.aiPrompt;
+    }
+  }
+}
+
+async function uploadImages(input) {
+  const files = Array.from(input.files || []);
+  const errEl = document.getElementById('err-upload');
+  errEl.textContent = '';
+  for (const file of files) {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch('/product-video/api/upload-image', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '이미지 업로드 중 오류가 발생했습니다.');
+      state.images.push({ url: data.url, source: 'upload' });
+    } catch (e) {
+      errEl.textContent = e.message;
+    }
+  }
+  input.value = '';
+  render();
+}
+
+async function generateAiImage(btn) {
+  const errEl = document.getElementById('err-ai-image');
+  errEl.textContent = '';
+  const prompt = (state.aiPrompt || document.getElementById('ai-prompt').value || '').trim();
+  if (!prompt) {
+    errEl.textContent = '장면 설명을 입력하세요.';
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 생성 중...';
+  try {
+    const res = await fetch('/product-video/api/generate-image', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prompt })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '이미지 생성 중 오류가 발생했습니다.');
+    state.images.push({ url: data.url, source: 'ai' });
+    state.aiCount += 1;
+    document.getElementById('ai-count').textContent = state.aiCount;
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+    render();
+  }
+}
+
+function removeImage(index) {
+  state.images.splice(index, 1);
+  render();
+}
+
+async function generateAudio(btn) {
+  const errEl = document.getElementById('err-audio');
+  errEl.textContent = '';
+  const text = (state.script || '').trim();
+  if (!text) {
+    errEl.textContent = '1단계에서 대본을 먼저 만들어 주세요.';
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 생성 중...';
+  try {
+    const res = await fetch('/product-video/api/generate-audio', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text, voice: state.voice, speed: state.speed })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '음성 생성 중 오류가 발생했습니다.');
+    state.audioUrl = data.url;
+    setActive(4);
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+    render();
+  }
+}
+
+async function uploadBgm(input) {
+  const file = input.files[0];
+  const errEl = document.getElementById('err-bgm');
+  errEl.textContent = '';
+  if (!file) return;
+  state.bgMusicName = file.name;
+  render();
+  try {
+    const formData = new FormData();
+    formData.append('bgm', file);
+    const res = await fetch('/product-video/api/upload-bgm', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '배경음악 업로드 중 오류가 발생했습니다.');
+    state.bgmFilename = data.filename;
+  } catch (e) {
+    errEl.textContent = e.message;
+    state.bgMusicName = '';
+    state.bgmFilename = '';
+  } finally {
+    render();
+  }
+}
+
+async function buildVideo(btn) {
+  const errEl = document.getElementById('err-video');
+  errEl.textContent = '';
+  if (!state.images.length) {
+    errEl.textContent = '2단계에서 사진을 먼저 준비해 주세요.';
+    return;
+  }
+  if (state.dubbingOn && !state.audioUrl) {
+    errEl.textContent = '더빙을 켰다면 3단계에서 음성을 먼저 만들어 주세요.';
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 영상 만드는 중... (최대 몇 분 걸릴 수 있어요)';
+  try {
+    const res = await fetch('/product-video/api/render-video', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        images: state.images.map(i => i.url),
+        audioUrl: state.dubbingOn ? state.audioUrl : '',
+        bgmFilename: state.bgmFilename || '',
+        bgmVolume: state.bgmVolume || 0.16,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '영상 합성 중 오류가 발생했습니다.');
+    state.videoUrl = data.url;
+    render();
+  } catch (e) {
+    errEl.textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function render() {
+  // 갤러리
+  const gallery = document.getElementById('gallery');
+  gallery.innerHTML = state.images.map((img, i) => `
+    <div class="gallery-item">
+      <img src="${img.url}" alt="scene ${i+1}" />
+      <span class="tag">${img.source === 'ai' ? 'AI' : '업로드'}</span>
+      <button class="remove-btn" onclick="removeImage(${i})">✕</button>
+    </div>
+  `).join('');
+  document.getElementById('gallery-note').style.display = state.images.length ? 'none' : 'block';
+
+  // 더빙 필드 표시 여부
+  document.getElementById('dubbing-fields').style.display = state.dubbingOn ? 'block' : 'none';
+
+  // 음성 미리듣기
+  const audioPreview = document.getElementById('audio-preview');
+  const audioStamp = document.getElementById('audio-stamp');
+  const btnVideo = document.getElementById('btn-video');
+  if (state.audioUrl) {
+    audioPreview.src = state.audioUrl;
+    audioPreview.style.display = 'block';
+    audioStamp.style.display = 'inline-flex';
+  } else {
+    audioPreview.style.display = 'none';
+    audioStamp.style.display = 'none';
+  }
+
+  // 배경음악 안내
+  const bgmNote = document.getElementById('bgm-note');
+  if (state.bgMusicName) {
+    bgmNote.style.display = 'block';
+    bgmNote.textContent = state.bgmFilename ? ('업로드됨: ' + state.bgMusicName) : ('업로드 중... ' + state.bgMusicName);
+    document.getElementById('bgm-volume-wrap').style.display = state.bgmFilename ? 'block' : 'none';
+  } else {
+    bgmNote.style.display = 'none';
+    document.getElementById('bgm-volume-wrap').style.display = 'none';
+  }
+
+  // 영상 만들기 버튼 활성화 조건
+  const canBuild = state.images.length > 0 && (!state.dubbingOn || state.audioUrl);
+  btnVideo.disabled = !canBuild;
+
+  // 진행 단계 표시 (사진이 있으면 3단계까지, 음성 있으면 4단계까지 열기)
+  if (state.script) setActive(state.images.length ? 3 : 2);
+  if (state.audioUrl || !state.dubbingOn) setActive(4);
+
+  // 영상 결과
+  const videoResult = document.getElementById('video-result');
+  if (state.videoUrl) {
+    videoResult.style.display = 'block';
+    document.getElementById('video-preview').src = state.videoUrl;
+    document.getElementById('video-download').href = state.videoUrl;
+    setActive(5);
+  } else {
+    videoResult.style.display = 'none';
+  }
+}
+
+render();
+</script>
+</body>
+</html>
