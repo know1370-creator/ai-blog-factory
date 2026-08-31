@@ -15,17 +15,38 @@ v3 변경사항:
 
 import os
 import base64
+import subprocess
+import tempfile
+from pathlib import Path
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, url_for
 from openai import OpenAI
 from google import genai
+from PIL import Image, ImageOps
+from werkzeug.utils import secure_filename
 
 # 텍스트 생성용 (기존과 동일하게 OpenAI 텍스트 모델 사용)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 MODEL = "gpt-4o-mini"  # 필요하면 기존 코드에서 쓰는 모델명으로 교체하세요
 
+# 더빙(TTS)용 모델 - OpenAI 텍스트-음성 변환
+TTS_MODEL = "tts-1"
+# 화면의 한글 목소리 이름 -> OpenAI TTS 목소리 이름 매핑
+VOICE_MAP = {
+    "차분한 여성 (기본)": "nova",
+    "밝은 여성": "shimmer",
+    "차분한 남성": "onyx",
+    "신뢰감 있는 남성": "echo",
+}
+
 # 이미지 생성 파일을 기존 사이트와 같은 폴더에 저장해서 /media/<filename> 으로 바로 보이게 합니다.
-from ..legacy_app import MEDIA_DIR, Article, db, analyze_seo
+# ffmpeg/음성 관련 헬퍼는 legacy_app.py에 이미 있는 것을 그대로 재사용합니다
+# (운세 릴스 영상 만들 때 오디오 트랙/9:16/faststart 문제를 이미 해결해둔 코드입니다).
+from ..legacy_app import (
+    MEDIA_DIR, Article, db, analyze_seo,
+    ffmpeg_binary, ffprobe_binary, media_duration_seconds, safe_float,
+    allowed_bgm_file, MAX_BGM_BYTES,
+)
 
 IMAGE_MODEL = "gemini-2.5-flash-image"  # 나노바나나
 
@@ -218,3 +239,198 @@ def generate_image_route():
         return jsonify({"url": f"/media/{filename}"})
     except Exception as e:
         return jsonify({"error": f"이미지 생성 중 오류: {e}"}), 500
+
+
+@content_factory_bp.route("/api/upload-bgm", methods=["POST"])
+def upload_bgm_route():
+    """배경음악 파일을 서버에 업로드합니다 (MP3/WAV/M4A/AAC/OGG, 25MB 이하)."""
+    file_storage = request.files.get("bgm")
+    if not file_storage or not file_storage.filename:
+        return jsonify({"error": "업로드할 배경음악 파일이 없습니다."}), 400
+
+    try:
+        if not allowed_bgm_file(file_storage.filename):
+            return jsonify({"error": "MP3, WAV, M4A, AAC, OGG 파일만 업로드할 수 있습니다."}), 400
+
+        safe_name = secure_filename(file_storage.filename)
+        extension = safe_name.rsplit(".", 1)[1].lower()
+        raw_bytes = file_storage.read()
+
+        if not raw_bytes:
+            return jsonify({"error": "업로드한 파일이 비어 있습니다."}), 400
+        if len(raw_bytes) > MAX_BGM_BYTES:
+            return jsonify({"error": "배경음악 파일은 25MB 이하만 업로드할 수 있습니다."}), 400
+
+        filename = f"content_factory_bgm_{int(datetime.utcnow().timestamp() * 1000)}.{extension}"
+        output_path = MEDIA_DIR / filename
+        output_path.write_bytes(raw_bytes)
+
+        # ffprobe로 정상 오디오 파일인지 확인 (깨진 파일이면 여기서 에러가 남)
+        media_duration_seconds(output_path)
+
+        return jsonify({"filename": filename})
+    except Exception as e:
+        return jsonify({"error": f"배경음악 업로드 중 오류: {e}"}), 500
+
+
+@content_factory_bp.route("/api/generate-audio", methods=["POST"])
+def generate_audio_route():
+    """대본 텍스트를 TTS 음성 파일(mp3)로 변환합니다. 6단계 '더빙 넣기'용."""
+    data = request.get_json(force=True, silent=True) or {}
+    text = (data.get("text") or "").strip()
+    voice_label = (data.get("voice") or "").strip()
+    speed = data.get("speed")
+
+    if not text:
+        return jsonify({"error": "변환할 대본이 없습니다. 4단계 쇼츠 대본이나 원본 글을 먼저 만들어 주세요."}), 400
+
+    voice = VOICE_MAP.get(voice_label, "nova")
+    speed = safe_float(speed, default=1.0, minimum=0.9, maximum=1.5)
+
+    # OpenAI TTS는 한 번 호출에 4096자까지만 받으므로 너무 길면 앞부분만 사용합니다.
+    text = text[:4000]
+
+    try:
+        response = client.audio.speech.create(
+            model=TTS_MODEL,
+            voice=voice,
+            input=text,
+            speed=speed,
+        )
+        filename = f"content_factory_tts_{int(datetime.utcnow().timestamp() * 1000)}.mp3"
+        output_path = MEDIA_DIR / filename
+        response.stream_to_file(str(output_path))
+
+        duration = media_duration_seconds(output_path)
+        return jsonify({"url": f"/media/{filename}", "duration": duration})
+    except Exception as e:
+        return jsonify({"error": f"음성 생성 중 오류: {e}"}), 500
+
+
+@content_factory_bp.route("/api/render-video", methods=["POST"])
+def render_video_route():
+    """5단계에서 고른 이미지들 + TTS 음성(+선택: 배경음악)을 합쳐서
+    세로(9:16) 숏폼 영상(mp4)을 만듭니다. 6단계 '숏폼 영상 초안 만들기' 버튼용.
+
+    기존 운세 릴스 생성 로직과 같은 방식(ffmpeg concat + faststart)을 쓰되,
+    화면 비율은 다이아몬드로 늘어지지 않도록 ImageOps.pad로 여백을 채웁니다.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    image_urls = data.get("images") or []
+    audio_url = (data.get("audioUrl") or "").strip()
+    bgm_filename = (data.get("bgmFilename") or "").strip()
+    bgm_volume = data.get("bgmVolume")
+
+    image_filenames = [u.rsplit("/", 1)[-1] for u in image_urls if u]
+    if not image_filenames:
+        return jsonify({"error": "선택된 이미지가 없습니다. 5단계에서 이미지를 먼저 만들고 선택해 주세요."}), 400
+
+    for filename in image_filenames:
+        if not (MEDIA_DIR / filename).exists():
+            return jsonify({"error": f"이미지 파일을 찾을 수 없습니다: {filename}"}), 400
+
+    audio_path = None
+    if audio_url:
+        audio_filename = audio_url.rsplit("/", 1)[-1]
+        audio_path = MEDIA_DIR / audio_filename
+        if not audio_path.exists():
+            return jsonify({"error": "음성 파일을 찾을 수 없습니다. 음성을 다시 만들어 주세요."}), 400
+        try:
+            narration_seconds = media_duration_seconds(audio_path)
+        except Exception as e:
+            return jsonify({"error": f"음성 길이를 읽지 못했습니다: {e}"}), 500
+        seconds_per_image = max(narration_seconds / len(image_filenames), 1.0)
+    else:
+        # 더빙 없이 만들 때는 기존 운세 릴스와 같은 방식으로 이미지당 3.5초 고정
+        seconds_per_image = 3.5
+
+    target_size = (1080, 1920)
+
+    try:
+        ffmpeg = ffmpeg_binary()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            resized_paths = []
+            for index, filename in enumerate(image_filenames):
+                with Image.open(MEDIA_DIR / filename) as img:
+                    # 비율을 유지하면서 여백을 채워 이미지가 다이아몬드로 늘어지지 않게 합니다.
+                    fitted = ImageOps.pad(img.convert("RGB"), target_size, color=(0, 0, 0))
+                    resized_path = tmp_path / f"frame_{index:02d}.png"
+                    fitted.save(resized_path, "PNG")
+                resized_paths.append(resized_path)
+
+            list_path = tmp_path / "list.txt"
+            with open(list_path, "w") as f:
+                for p in resized_paths:
+                    f.write(f"file '{p.name}'\n")
+                    f.write(f"duration {seconds_per_image:.3f}\n")
+                # ffmpeg concat 방식은 마지막 파일을 한 번 더 적어줘야 마지막 장면이 온전히 보입니다.
+                f.write(f"file '{resized_paths[-1].name}'\n")
+
+            silent_video_path = tmp_path / "silent.mp4"
+            subprocess.run(
+                [
+                    ffmpeg, "-y",
+                    "-f", "concat", "-safe", "0", "-i", str(list_path),
+                    "-vsync", "cfr", "-r", "24",
+                    "-pix_fmt", "yuv420p",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+                    "-threads", "1",
+                    str(silent_video_path),
+                ],
+                check=True, capture_output=True, timeout=120,
+            )
+
+            output_filename = f"content_factory_video_{int(datetime.utcnow().timestamp() * 1000)}.mp4"
+            output_path = MEDIA_DIR / output_filename
+
+            has_bgm = bool(bgm_filename) and (MEDIA_DIR / bgm_filename).exists()
+            # 더빙이 없으면 무음 트랙(anullsrc)을 음성 자리에 대신 넣습니다.
+            voice_input = ["-i", str(audio_path)] if audio_path else [
+                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"
+            ]
+
+            if has_bgm:
+                bgm_path = MEDIA_DIR / bgm_filename
+                bgm_volume = safe_float(bgm_volume, default=0.16, minimum=0.02, maximum=1.0)
+                filter_complex = (
+                    "[1:a]volume=1.0,aresample=44100,"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo[voice];"
+                    f"[2:a]volume={bgm_volume:.3f},aresample=44100,"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo[bgm];"
+                    "[voice][bgm]amix=inputs=2:duration=first:"
+                    "dropout_transition=2,alimiter=limit=0.95[outa]"
+                )
+                cmd = [
+                    ffmpeg, "-y",
+                    "-i", str(silent_video_path),
+                    *voice_input,
+                    "-stream_loop", "-1", "-i", str(bgm_path),
+                    "-filter_complex", filter_complex,
+                    "-map", "0:v:0", "-map", "[outa]",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                    "-shortest", "-movflags", "+faststart",
+                    str(output_path),
+                ]
+            else:
+                cmd = [
+                    ffmpeg, "-y",
+                    "-i", str(silent_video_path),
+                    *voice_input,
+                    "-map", "0:v:0", "-map", "1:a:0",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                    "-shortest", "-movflags", "+faststart",
+                    str(output_path),
+                ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode != 0:
+                return jsonify({"error": "영상 합성 실패: " + result.stderr[-1500:]}), 500
+
+        return jsonify({"url": f"/media/{output_filename}"})
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode("utf-8", "ignore") if isinstance(e.stderr, bytes) else str(e.stderr)
+        return jsonify({"error": "영상 합성 중 오류: " + stderr[-1500:]}), 500
+    except Exception as e:
+        return jsonify({"error": f"영상 합성 중 오류: {e}"}), 500

@@ -239,6 +239,95 @@ async function callImageApi(prompt) {
   return data.url;
 }
 
+async function generateNarration(btn) {
+  const c = state.content;
+  const text = (c.shorts || c.original || '').trim();
+  const errEl = document.getElementById('err-audio');
+  if (errEl) errEl.textContent = '';
+  if (!text) return;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 생성 중...';
+  try {
+    const res = await fetch('/content-factory/api/generate-audio', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text, voice: c.voice || VOICES[0], speed: c.speed || 1.0 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '음성 생성 중 오류가 발생했습니다.');
+    state.content.audioUrl = data.url;
+    state.content.videoBuilt = false;
+    state.content.videoUrl = '';
+    render();
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+async function uploadBgm(input) {
+  const file = input.files[0];
+  const errEl = document.getElementById('err-bgm');
+  if (errEl) errEl.textContent = '';
+  if (!file) return;
+  state.content.bgMusicName = file.name;
+  state.content.bgmUploading = true;
+  render();
+  try {
+    const formData = new FormData();
+    formData.append('bgm', file);
+    const res = await fetch('/content-factory/api/upload-bgm', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '배경음악 업로드 중 오류가 발생했습니다.');
+    state.content.bgmFilename = data.filename;
+    state.content.bgmVolume = state.content.bgmVolume || 0.16;
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+    state.content.bgMusicName = '';
+    state.content.bgmFilename = '';
+  } finally {
+    state.content.bgmUploading = false;
+    render();
+  }
+}
+
+async function buildVideo(btn) {
+  const c = state.content;
+  const errEl = document.getElementById('err-video');
+  if (errEl) errEl.textContent = '';
+  const chosenUrls = (c.selectedImages || [])
+    .map((sel, i) => sel ? c.imageUrls[i] : null)
+    .filter(Boolean);
+  if (!chosenUrls.length) return;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ 영상 만드는 중... (최대 몇 분 걸릴 수 있어요)';
+  try {
+    const res = await fetch('/content-factory/api/render-video', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        images: chosenUrls,
+        audioUrl: c.dubbingOn ? (c.audioUrl || '') : '',
+        bgmFilename: c.bgmFilename || '',
+        bgmVolume: c.bgmVolume || 0.16,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '영상 합성 중 오류가 발생했습니다.');
+    state.content.videoUrl = data.url;
+    state.content.videoBuilt = true;
+    state.done.video = true;
+    render();
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
 function renderStepper() {
   const el = document.getElementById('stepper');
   el.innerHTML = STEPS.map(s => `
@@ -519,27 +608,41 @@ function panelHTML(s) {
       <label class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" ${c.dubbingOn?'checked':''} onchange="state.content.dubbingOn=this.checked; render()" /> 더빙 넣기</label>
       ${c.dubbingOn ? `
       <label class="field">더빙 목소리</label>
-      <select onchange="state.content.voice=this.value">${VOICES.map(v=>`<option ${c.voice===v?'selected':''}>${v}</option>`).join('')}</select>
+      <select onchange="state.content.voice=this.value; state.content.audioUrl=''; render()">${VOICES.map(v=>`<option ${c.voice===v?'selected':''}>${v}</option>`).join('')}</select>
       <label class="field">말 속도 (${c.speed||1.0}배속, 0.9~1.5 사이)</label>
-      <input type="range" min="0.9" max="1.5" step="0.1" value="${c.speed||1.0}" oninput="state.content.speed=this.value; render()" />
+      <input type="range" min="0.9" max="1.5" step="0.1" value="${c.speed||1.0}" oninput="state.content.speed=this.value" onchange="state.content.audioUrl=''; render()" />
+      <div class="row">
+        <button class="btn-ghost" id="generate-audio-btn" onclick="generateNarration(this)" ${(c.shorts||c.original) ? '' : 'disabled title="4단계 쇼츠 대본이나 1단계 원본 글을 먼저 만들어 주세요"'}>🎤 이 목소리로 대본 읽어보기</button>
+        ${c.audioUrl ? '<span class="stamp">음성 생성됨</span>' : ''}
+      </div>
+      <div class="error" id="err-audio"></div>
+      ${c.audioUrl ? `<audio controls src="${esc(c.audioUrl)}" style="width:100%; margin-top:8px;"></audio>` : ''}
       ` : ''}
 
       <label class="field">배경음악 (선택)</label>
-      <input type="file" onchange="state.content.bgMusicName=this.files[0]?this.files[0].name:''; render()" />
-      ${c.bgMusicName ? `<div class="note">선택된 파일: ${esc(c.bgMusicName)}</div>` : ''}
+      <input type="file" accept="audio/*" onchange="uploadBgm(this)" />
+      ${c.bgMusicName ? `<div class="note">${c.bgmUploading ? '업로드 중...' : '업로드됨: ' + esc(c.bgMusicName)}</div>` : ''}
+      ${c.bgmFilename ? `
+      <label class="field">배경음악 볼륨 (${c.bgmVolume||0.16})</label>
+      <input type="range" min="0.02" max="0.6" step="0.02" value="${c.bgmVolume||0.16}" oninput="state.content.bgmVolume=this.value" onchange="render()" />
+      ` : ''}
+      <div class="error" id="err-bgm"></div>
 
       <div class="row">
-        <button class="btn-primary" onclick="state.done.video=true; state.content.videoBuilt=true; render()" ${chosen.length ? '' : 'disabled'}>✨ 숏폼 영상 초안 만들기</button>
+        <button class="btn-primary" id="render-video-btn" onclick="buildVideo(this)" ${(chosen.length && (!c.dubbingOn || c.audioUrl)) ? '' : 'disabled'}>✨ 숏폼 영상 만들기</button>
         ${c.videoBuilt ? `<button class="btn-ghost" onclick="render()">↻ 다시 구성</button>` : ''}
         ${state.done.video ? '<span class="stamp">구성 완료</span>' : ''}
       </div>
       ${!chosen.length ? '<div class="note">5단계에서 이미지를 만들고 골라야 장면을 이어 붙일 수 있어요.</div>' : ''}
+      ${c.dubbingOn && !c.audioUrl ? '<div class="note">더빙을 켰다면 영상을 만들기 전에 먼저 음성을 생성해 주세요.</div>' : ''}
+      <div class="error" id="err-video"></div>
 
-      ${c.videoBuilt ? `
+      ${c.videoBuilt && c.videoUrl ? `
       <div class="row" style="border:1px solid var(--line); border-radius:10px; padding:14px; display:block;">
         <div class="station">VIDEO DRAFT</div>
         <div style="font-size:13px; color:var(--muted); margin-top:6px;">장면 ${chosen.length}컷 · 더빙: ${c.dubbingOn ? (c.voice||VOICES[0]) + ' · ' + (c.speed||1.0) + '배속' : '더빙 없음'} · 세로 9:16</div>
-        <div class="note">실제 렌더링은 기존 릴스 생성 파이프라인(ffmpeg)과 연결해야 파일로 나옵니다.</div>
+        <video controls src="${esc(c.videoUrl)}" style="width:100%; max-width:320px; margin-top:10px; border-radius:8px;"></video>
+        <div class="row" style="margin-top:8px;"><a class="btn-ghost" href="${esc(c.videoUrl)}" download>⬇ 영상 다운로드</a></div>
       </div>` : ''}
       ${footerHTML(6, !!c.videoBuilt)}
     `;
